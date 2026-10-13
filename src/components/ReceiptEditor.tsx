@@ -61,6 +61,7 @@ export const ReceiptEditor: React.FC<ReceiptEditorProps> = ({
   const [refNumber, setRefNumber] = useState<string>(extracted.refNumber || '');
   const [senderAccount, setSenderAccount] = useState<string>(extracted.senderAccount || '');
   const [senderName, setSenderName] = useState<string>(extracted.senderName || '');
+  const [customerPhone, setCustomerPhone] = useState<string>(extracted.customerPhone || '');
   const [beneficiaryAccount, setBeneficiaryAccount] = useState<string>(
     extracted.beneficiaryAccount || ''
   );
@@ -108,6 +109,7 @@ export const ReceiptEditor: React.FC<ReceiptEditorProps> = ({
       refNumber: refNumber.trim(),
       senderAccount: senderAccount.trim() || undefined,
       senderName: senderName.trim() || undefined,
+      customerPhone: customerPhone.trim() || undefined,
       beneficiaryAccount: beneficiaryAccount.trim() || undefined,
       beneficiaryName: beneficiaryName.trim() || undefined,
       status: isDuplicate && status === 'verified' ? 'duplicate' : status,
@@ -324,6 +326,24 @@ export const ReceiptEditor: React.FC<ReceiptEditorProps> = ({
                 onChange={(e) => setSenderName(e.target.value)}
                 placeholder="Account number or sender name"
                 className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-hidden"
+              />
+            </div>
+
+            {/* Customer WhatsApp Phone */}
+            <div>
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1 flex items-center justify-between">
+                <span className="flex items-center gap-1.5">
+                  <span className="text-green-600 font-bold">WhatsApp No:</span>
+                  <span>{lang === 'si' ? 'දුරකථන අංකය' : 'Phone'}</span>
+                </span>
+                <span className="text-[11px] text-slate-400 font-normal">e.g. 0771234567</span>
+              </label>
+              <input
+                type="text"
+                value={customerPhone}
+                onChange={(e) => setCustomerPhone(e.target.value)}
+                placeholder="07X XXXXXXX"
+                className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-mono focus:ring-2 focus:ring-green-500 outline-hidden"
               />
             </div>
 

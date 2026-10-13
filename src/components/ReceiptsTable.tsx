@@ -24,7 +24,16 @@ import {
   Clock,
   Eye,
   FileX2,
+  UserX,
+  Bot,
+  Send,
 } from 'lucide-react';
+import {
+  getExcludedContacts,
+  saveExcludedContacts,
+  isContactExcluded,
+  ExcludedContact,
+} from '../services/whatsappAi';
 
 interface ReceiptsTableProps {
   receipts: ReceiptRecord[];
@@ -34,6 +43,7 @@ interface ReceiptsTableProps {
   onClearAll: () => void;
   onOpenSheetsModal: () => void;
   onViewImage: (receipt: ReceiptRecord) => void;
+  onOpenWhatsAppAiForReceipt: (receipt: ReceiptRecord) => void;
 }
 
 export const ReceiptsTable: React.FC<ReceiptsTableProps> = ({
@@ -44,6 +54,7 @@ export const ReceiptsTable: React.FC<ReceiptsTableProps> = ({
   onClearAll,
   onOpenSheetsModal,
   onViewImage,
+  onOpenWhatsAppAiForReceipt,
 }) => {
   const t = TRANSLATIONS[lang];
 
@@ -52,6 +63,7 @@ export const ReceiptsTable: React.FC<ReceiptsTableProps> = ({
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [excludedList, setExcludedList] = useState<ExcludedContact[]>(getExcludedContacts);
 
   // Filter receipts
   const filteredReceipts = useMemo(() => {
@@ -79,6 +91,35 @@ export const ReceiptsTable: React.FC<ReceiptsTableProps> = ({
       return true;
     });
   }, [receipts, bankFilter, statusFilter, searchQuery]);
+
+  const handleToggleExclude = (record: ReceiptRecord) => {
+    const phone = record.customerPhone || '';
+    const name = record.senderName || '';
+    const isExcluded = isContactExcluded(phone, name);
+
+    if (isExcluded) {
+      const cleanPhone = phone.replace(/[^0-9]/g, '');
+      const updated = excludedList.filter((item) => {
+        const itemClean = item.phone.replace(/[^0-9]/g, '');
+        const phoneMatches = itemClean && cleanPhone && cleanPhone.includes(itemClean);
+        const nameMatches = name && item.name.toLowerCase().trim() === name.toLowerCase().trim();
+        return !(phoneMatches || nameMatches);
+      });
+      setExcludedList(updated);
+      saveExcludedContacts(updated);
+    } else {
+      const newEx: ExcludedContact = {
+        id: `ex-${Date.now()}`,
+        name: name || `Customer (${record.refNumber})`,
+        phone: phone || record.senderAccount || '07XXXXXXXX',
+        reason: `Manual exclude from receipt ${record.refNumber}`,
+        addedAt: new Date().toISOString(),
+      };
+      const updated = [newEx, ...excludedList];
+      setExcludedList(updated);
+      saveExcludedContacts(updated);
+    }
+  };
 
   const handleCopyRef = (id: string, ref: string) => {
     navigator.clipboard.writeText(ref);
@@ -390,11 +431,21 @@ export const ReceiptsTable: React.FC<ReceiptsTableProps> = ({
                         </div>
                       ) : null}
                       {record.senderName || record.senderAccount ? (
-                        <div className="line-clamp-1 text-[11px] text-slate-400">
+                        <div className="line-clamp-1 text-[11px] text-slate-500">
                           From: {record.senderName || record.senderAccount}
                         </div>
                       ) : null}
-                      {!record.beneficiaryName && !record.senderName && (
+                      {record.customerPhone && (
+                        <div className="font-mono text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold mt-0.5">
+                          📱 {record.customerPhone}
+                        </div>
+                      )}
+                      {isContactExcluded(record.customerPhone || '', record.senderName) && (
+                        <span className="inline-block mt-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-100 dark:bg-rose-950 text-rose-700 dark:text-rose-300 border border-rose-300 dark:border-rose-800">
+                          🚫 {lang === 'si' ? 'Excluded (Reply නැත)' : 'Auto-Reply Excluded'}
+                        </span>
+                      )}
+                      {!record.beneficiaryName && !record.senderName && !record.customerPhone && (
                         <span className="text-slate-400">-</span>
                       )}
                     </td>
@@ -424,15 +475,40 @@ export const ReceiptsTable: React.FC<ReceiptsTableProps> = ({
                             <Eye className="w-4 h-4" />
                           </button>
                         )}
+                        {/* 1-Click Send Verification to WhatsApp */}
                         <button
                           type="button"
                           onClick={() => shareOnWhatsApp(record)}
-                          className="p-1.5 text-slate-400 hover:text-green-600 dark:hover:text-green-400 rounded transition-colors"
-                          title="Share Verification on WhatsApp"
+                          className="p-1.5 text-green-600 hover:text-green-700 hover:bg-green-50 dark:hover:bg-green-950/40 rounded transition-colors"
+                          title={lang === 'si' ? 'WhatsApp මගින් විස්තර යවන්න' : 'Send receipt details on WhatsApp'}
                         >
-                          <svg className="w-4 h-4 fill-current text-green-600" viewBox="0 0 24 24">
-                            <path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.287l-.711 2.592 2.654-.696c.969.529 1.942.809 2.805.809 3.182 0 5.768-2.586 5.768-5.766 0-3.18-2.586-5.766-5.767-5.766zm3.385 8.168c-.145.409-.844.757-1.157.781-.314.024-.627.086-2.049-.496-1.704-.696-2.793-2.457-2.879-2.571-.086-.115-.694-.925-.694-1.765s.44-1.25.597-1.42c.157-.17.343-.213.457-.213.114 0 .229.002.329.006.105.005.245-.04.383.292.144.343.491 1.203.535 1.289.043.086.072.186.014.3-.057.115-.086.186-.171.286-.086.1-.182.224-.26.301-.086.086-.176.18-.076.352.1.171.444.733.953 1.186.655.584 1.207.765 1.378.851.171.086.271.072.371-.043.1-.115.428-.499.542-.67.114-.171.229-.143.385-.086.157.057.994.469 1.165.555.171.086.286.128.329.2.043.071.043.414-.102.823z" />
-                          </svg>
+                          <Send className="w-4 h-4" />
+                        </button>
+                        {/* WhatsApp AI Auto-Reply & Customizer */}
+                        <button
+                          type="button"
+                          onClick={() => onOpenWhatsAppAiForReceipt(record)}
+                          className="p-1.5 text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400 rounded transition-colors"
+                          title="WhatsApp AI Assistant & Auto-Reply"
+                        >
+                          <Bot className="w-4 h-4 text-emerald-600" />
+                        </button>
+                        {/* 1-Click Exclude / Unexclude Toggle */}
+                        <button
+                          type="button"
+                          onClick={() => handleToggleExclude(record)}
+                          className={`p-1.5 rounded transition-colors ${
+                            isContactExcluded(record.customerPhone || '', record.senderName)
+                              ? 'text-rose-600 bg-rose-50 dark:bg-rose-950/60'
+                              : 'text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30'
+                          }`}
+                          title={
+                            isContactExcluded(record.customerPhone || '', record.senderName)
+                              ? (lang === 'si' ? 'Exclude ලැයිස්තුවෙන් ඉවත් කරන්න (Reply යවන්න)' : 'Remove from Exclude List')
+                              : (lang === 'si' ? 'Exclude කරන්න (මෙම Customer ට Auto-Reply නොයන ලෙස අයින් කරන්න)' : 'Exclude this customer from Auto-Reply')
+                          }
+                        >
+                          <UserX className="w-4 h-4" />
                         </button>
                         <button
                           type="button"

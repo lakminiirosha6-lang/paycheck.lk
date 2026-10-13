@@ -2,7 +2,7 @@ import React from 'react';
 import { User } from 'firebase/auth';
 import { TRANSLATIONS } from '../constants/translations';
 import { Language } from '../types';
-import { ShieldCheck, Globe, LogOut, FileSpreadsheet, Github, Download } from 'lucide-react';
+import { ShieldCheck, Globe, LogOut, FileSpreadsheet, Github, Download, Bot } from 'lucide-react';
 
 import { ReceiptLogo } from './ReceiptLogo';
 
@@ -14,6 +14,7 @@ interface HeaderProps {
   onSignOutClick: () => void;
   onOpenGithubGuide: () => void;
   onOpenSheetsModal: () => void;
+  onOpenWhatsAppAiModal: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -24,6 +25,7 @@ export const Header: React.FC<HeaderProps> = ({
   onSignOutClick,
   onOpenGithubGuide,
   onOpenSheetsModal,
+  onOpenWhatsAppAiModal,
 }) => {
   const t = TRANSLATIONS[lang];
 
@@ -78,6 +80,17 @@ export const Header: React.FC<HeaderProps> = ({
                 සිංහල
               </button>
             </div>
+
+            {/* WhatsApp AI Auto-Reply & Dispatcher */}
+            <button
+              type="button"
+              onClick={onOpenWhatsAppAiModal}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs sm:text-sm font-bold rounded-lg text-white bg-green-600 hover:bg-green-700 shadow-sm shadow-green-600/20 transition-all hover:scale-105"
+              title="WhatsApp AI Auto-Responder & Customer Dispatcher"
+            >
+              <Bot className="w-4 h-4" />
+              <span>WhatsApp AI</span>
+            </button>
 
             {/* Google Sheets Action Button */}
             <button

@@ -189,6 +189,13 @@ export const extractReceiptFields = (
     Math.max(45, Math.round(ocrConfidence * 0.6 + (detectedCount / 5) * 40))
   );
 
+  // 7. Detect Sri Lankan phone number if present
+  let customerPhone = '';
+  const phoneMatch = rawText.match(/(?:(?:\+?94)|0)?(7[01245678][0-9]{7})\b/);
+  if (phoneMatch && phoneMatch[1]) {
+    customerPhone = `0${phoneMatch[1]}`;
+  }
+
   return {
     bankId: detectedBankId,
     bankName,
@@ -200,6 +207,7 @@ export const extractReceiptFields = (
     refNumber: detectedRef || generateFallbackRef(detectedBankId),
     senderAccount,
     senderName,
+    customerPhone,
     beneficiaryAccount,
     beneficiaryName,
     confidence: finalConfidence,

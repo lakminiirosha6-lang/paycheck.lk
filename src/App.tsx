@@ -27,6 +27,7 @@ import { ReceiptsTable } from './components/ReceiptsTable';
 import { GoogleSheetsModal } from './components/GoogleSheetsModal';
 import { GitHubGuideModal } from './components/GitHubGuideModal';
 import { ImagePreviewModal } from './components/ImagePreviewModal';
+import { WhatsAppAiModal } from './components/WhatsAppAiModal';
 
 import {
   Loader2,
@@ -35,7 +36,13 @@ import {
   Github,
   CheckCircle2,
   AlertTriangle,
+  Bot,
+  Sparkles,
+  UserX,
+  MessageSquare,
+  Send,
 } from 'lucide-react';
+import { getExcludedContacts } from './services/whatsappAi';
 
 export default function App() {
   const [lang, setLang] = useState<Language>(getStoredLanguage);
@@ -60,6 +67,8 @@ export default function App() {
   // Modals
   const [isSheetsModalOpen, setIsSheetsModalOpen] = useState(false);
   const [isGithubModalOpen, setIsGithubModalOpen] = useState(false);
+  const [isWhatsAppAiModalOpen, setIsWhatsAppAiModalOpen] = useState(false);
+  const [whatsAppModalReceipt, setWhatsAppModalReceipt] = useState<ReceiptRecord | null>(null);
   const [previewImageReceipt, setPreviewImageReceipt] = useState<ReceiptRecord | null>(null);
   const [justSavedReceipt, setJustSavedReceipt] = useState<ReceiptRecord | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -201,6 +210,11 @@ export default function App() {
     window.open('/single-file/index.html', '_blank');
   };
 
+  const handleOpenWhatsAppAi = (receipt?: ReceiptRecord | null) => {
+    setWhatsAppModalReceipt(receipt || null);
+    setIsWhatsAppAiModalOpen(true);
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col font-sans transition-colors">
       {/* Top Navigation */}
@@ -212,6 +226,7 @@ export default function App() {
         onSignOutClick={handleSignOut}
         onOpenGithubGuide={() => setIsGithubModalOpen(true)}
         onOpenSheetsModal={() => setIsSheetsModalOpen(true)}
+        onOpenWhatsAppAiModal={() => handleOpenWhatsAppAi(null)}
       />
 
       {/* Main Content Area */}
@@ -248,7 +263,16 @@ export default function App() {
               </div>
             </div>
 
-            <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+            <div className="flex items-center flex-wrap gap-2 w-full sm:w-auto justify-end">
+              <button
+                type="button"
+                onClick={() => handleOpenWhatsAppAi(justSavedReceipt)}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-white dark:bg-slate-800 text-green-800 dark:text-green-200 border border-green-300 dark:border-green-700 font-bold text-xs shadow-xs hover:bg-green-50 dark:hover:bg-slate-700 transition-colors"
+                title="Customize with Gemini AI & Auto-Reply"
+              >
+                <Bot className="w-4 h-4 text-green-600" />
+                <span>{lang === 'si' ? 'AI පණිවිඩය සකසන්න' : 'Draft AI Message'}</span>
+              </button>
               <button
                 type="button"
                 onClick={() => shareOnWhatsApp(justSavedReceipt)}
@@ -257,7 +281,7 @@ export default function App() {
                 <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
                   <path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.287l-.711 2.592 2.654-.696c.969.529 1.942.809 2.805.809 3.182 0 5.768-2.586 5.768-5.766 0-3.18-2.586-5.766-5.767-5.766zm3.385 8.168c-.145.409-.844.757-1.157.781-.314.024-.627.086-2.049-.496-1.704-.696-2.793-2.457-2.879-2.571-.086-.115-.694-.925-.694-1.765s.44-1.25.597-1.42c.157-.17.343-.213.457-.213.114 0 .229.002.329.006.105.005.245-.04.383.292.144.343.491 1.203.535 1.289.043.086.072.186.014.3-.057.115-.086.186-.171.286-.086.1-.182.224-.26.301-.086.086-.176.18-.076.352.1.171.444.733.953 1.186.655.584 1.207.765 1.378.851.171.086.271.072.371-.043.1-.115.428-.499.542-.67.114-.171.229-.143.385-.086.157.057.994.469 1.165.555.171.086.286.128.329.2.043.071.043.414-.102.823z" />
                 </svg>
-                <span>Share Verification on WhatsApp</span>
+                <span>Share on WhatsApp</span>
               </button>
               <button
                 type="button"
@@ -273,6 +297,49 @@ export default function App() {
 
         {/* Quick Summary Cards */}
         <StatsOverview receipts={receipts} lang={lang} />
+
+        {/* WhatsApp AI Auto-Reply & Customer Assistant Bar */}
+        <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-emerald-50 via-teal-50 to-green-50 dark:from-emerald-950/40 dark:via-teal-950/30 dark:to-green-950/40 border border-emerald-200 dark:border-emerald-800 shadow-sm flex flex-col md:flex-row items-center justify-between gap-4">
+          <div className="flex items-center gap-3 w-full md:w-auto">
+            <div className="w-11 h-11 rounded-xl bg-green-600 text-white flex items-center justify-center font-bold shadow-md shadow-green-600/30 flex-shrink-0">
+              <Bot className="w-6 h-6" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm sm:text-base font-bold text-slate-900 dark:text-white">
+                  {lang === 'si' ? 'WhatsApp AI සහකරු & Auto-Reply පද්ධතිය' : 'WhatsApp AI Assistant & Auto-Reply Hub'}
+                </h3>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase bg-green-100 text-green-800 dark:bg-green-900/60 dark:text-green-300 border border-green-300 dark:border-green-700">
+                  Gemini 3.8 Flash
+                </span>
+              </div>
+              <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">
+                {lang === 'si'
+                  ? 'මම කියන විදියට AI මගින් WhatsApp මැසේජ් යැවීම, Customer Auto-Reply සහ Exclude ලැයිස්තුව කළමනාකරණය'
+                  : 'Automated AI customer messaging, smart query auto-replies, and selective contact exclusion'}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center flex-wrap gap-2 w-full md:w-auto justify-end">
+            <button
+              type="button"
+              onClick={() => handleOpenWhatsAppAi(null)}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-700 font-bold text-xs hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors shadow-xs"
+            >
+              <UserX className="w-3.5 h-3.5 text-rose-500" />
+              <span>{lang === 'si' ? 'Exclude List (Reply නවත්වන්න)' : 'Exclude List'}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => handleOpenWhatsAppAi(null)}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-green-600 hover:bg-green-700 text-white font-bold text-xs sm:text-sm shadow-md shadow-green-600/20 transition-all hover:scale-105"
+            >
+              <Sparkles className="w-4 h-4" />
+              <span>{lang === 'si' ? 'AI WhatsApp විවෘත කරන්න' : 'Open WhatsApp AI'}</span>
+            </button>
+          </div>
+        </div>
 
         {/* OCR Progress Overlay */}
         {isProcessing && (
@@ -333,6 +400,7 @@ export default function App() {
           onClearAll={handleClearAll}
           onOpenSheetsModal={() => setIsSheetsModalOpen(true)}
           onViewImage={(rec) => setPreviewImageReceipt(rec)}
+          onOpenWhatsAppAiForReceipt={(rec) => handleOpenWhatsAppAi(rec)}
         />
 
         {/* Bottom Quick Tools Banner */}
@@ -348,6 +416,14 @@ export default function App() {
           </div>
 
           <div className="flex items-center flex-wrap gap-2.5">
+            <button
+              type="button"
+              onClick={() => handleOpenWhatsAppAi(null)}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-green-600 text-white font-bold text-xs sm:text-sm hover:bg-green-700 transition-colors shadow-sm"
+            >
+              <Bot className="w-4 h-4" />
+              <span>WhatsApp AI Hub</span>
+            </button>
             <button
               type="button"
               onClick={() => setIsGithubModalOpen(true)}
@@ -374,9 +450,18 @@ export default function App() {
           PayCheck.lk • Sri Lankan Bank Receipt OCR Verifier • Commercial Bank, BOC, Sampath, NSB, People's & HNB
         </p>
         <p className="mt-1 text-[11px] text-slate-400">
-          Client-side Tesseract.js & PDF.js • Google Workspace Integration • LocalStorage Persistence
+          Client-side Tesseract.js & PDF.js • Google Workspace Integration • LocalStorage Persistence • Gemini AI WhatsApp Assistant
         </p>
       </footer>
+
+      {/* WhatsApp AI Auto-Responder Modal */}
+      <WhatsAppAiModal
+        isOpen={isWhatsAppAiModalOpen}
+        onClose={() => setIsWhatsAppAiModalOpen(false)}
+        receipts={receipts}
+        selectedReceipt={whatsAppModalReceipt}
+        lang={lang}
+      />
 
       {/* Google Sheets Modal */}
       <GoogleSheetsModal

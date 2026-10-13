@@ -35,6 +35,8 @@ export interface ReceiptRecord {
   senderName?: string;
   beneficiaryAccount?: string;
   beneficiaryName?: string;
+  customerPhone?: string;
+  isExcluded?: boolean;
   status: ReceiptStatus;
   notes?: string;
   rawOcrText: string;
@@ -57,6 +59,7 @@ export interface ExtractedFields {
   refNumber: string;
   senderAccount: string;
   senderName: string;
+  customerPhone?: string;
   beneficiaryAccount: string;
   beneficiaryName: string;
   confidence: number;
