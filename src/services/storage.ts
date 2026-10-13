@@ -1,0 +1,166 @@
+import { ReceiptRecord } from '../types';
+
+const STORAGE_KEY = 'paycheck_lk_receipts_v1';
+const LANG_STORAGE_KEY = 'paycheck_lk_language';
+
+export const getStoredLanguage = (): 'en' | 'si' => {
+  try {
+    const val = localStorage.getItem(LANG_STORAGE_KEY);
+    if (val === 'si' || val === 'en') return val;
+  } catch (e) {
+    console.error(e);
+  }
+  return 'en';
+};
+
+export const setStoredLanguage = (lang: 'en' | 'si') => {
+  try {
+    localStorage.setItem(LANG_STORAGE_KEY, lang);
+  } catch (e) {
+    console.error(e);
+  }
+};
+
+export const getStoredReceipts = (): ReceiptRecord[] => {
+  try {
+    const data = localStorage.getItem(STORAGE_KEY);
+    if (data) {
+      return JSON.parse(data);
+    }
+  } catch (e) {
+    console.error('Failed to load receipts from localStorage:', e);
+  }
+
+  // Initial seed with two sample verified records so the user sees immediate value
+  const initialSeeds: ReceiptRecord[] = [
+    {
+      id: 'seed-1',
+      bankId: 'commercial',
+      bankName: 'Commercial Bank of Ceylon',
+      amount: 48500.0,
+      amountFormatted: '48,500.00',
+      currency: 'LKR',
+      date: '2026-10-12',
+      time: '14:32:15',
+      refNumber: 'CB982341209',
+      senderAccount: '8004129841',
+      senderName: 'Mr. K. Perera',
+      beneficiaryAccount: '1009845231',
+      beneficiaryName: 'TechSolutions Lanka (Pvt) Ltd',
+      status: 'verified',
+      notes: 'Software development retainer payment',
+      rawOcrText: 'COMMERCIAL BANK ONLINE TRANSACTION ADVICE... Ref: CB982341209 LKR 48,500.00',
+      confidence: 96,
+      fileName: 'combank_transfer_slip.png',
+      fileSize: 142050,
+      createdAt: new Date(Date.now() - 3600000 * 5).toISOString(),
+    },
+    {
+      id: 'seed-2',
+      bankId: 'boc',
+      bankName: 'Bank of Ceylon (BOC)',
+      amount: 14250.0,
+      amountFormatted: '14,250.00',
+      currency: 'LKR',
+      date: '2026-10-11',
+      time: '10:15 AM',
+      refNumber: 'BOC77218943',
+      senderAccount: '0008451293',
+      senderName: 'Mrs. M. Fernando',
+      beneficiaryAccount: '0076239102',
+      beneficiaryName: 'Colombo Water Board',
+      status: 'verified',
+      notes: 'Monthly utility settlement',
+      rawOcrText: 'BANK OF CEYLON BOC SmartPay E-Receipt... Ref: BOC77218943 Rs. 14,250.00',
+      confidence: 94,
+      fileName: 'boc_smartpay_receipt.jpg',
+      fileSize: 98120,
+      createdAt: new Date(Date.now() - 3600000 * 24).toISOString(),
+    },
+  ];
+
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(initialSeeds));
+  } catch (e) {
+    console.error(e);
+  }
+
+  return initialSeeds;
+};
+
+export const saveReceiptsToStorage = (receipts: ReceiptRecord[]): void => {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(receipts));
+  } catch (e) {
+    console.error('Failed to save receipts to localStorage:', e);
+  }
+};
+
+export const checkIsDuplicateRef = (
+  refNumber: string,
+  receipts: ReceiptRecord[],
+  excludeId?: string
+): boolean => {
+  if (!refNumber || refNumber.trim().length === 0) return false;
+  const cleanRef = refNumber.trim().toLowerCase();
+  return receipts.some(
+    (r) => r.id !== excludeId && r.refNumber.trim().toLowerCase() === cleanRef
+  );
+};
+
+export const exportReceiptsToCSV = (receipts: ReceiptRecord[], filename?: string): void => {
+  const headers = [
+    'Ref / Txn No',
+    'Bank Name',
+    'Amount (LKR)',
+    'Date',
+    'Time',
+    'Sender Name',
+    'Sender Account',
+    'Beneficiary Name',
+    'Beneficiary Account',
+    'Verification Status',
+    'OCR Confidence (%)',
+    'Remarks / Notes',
+    'File Name',
+    'Record Created At',
+  ];
+
+  const escapeCSV = (val: any) => {
+    if (val === null || val === undefined) return '""';
+    const str = String(val).replace(/"/g, '""');
+    return `"${str}"`;
+  };
+
+  const rows = receipts.map((r) => [
+    escapeCSV(r.refNumber),
+    escapeCSV(r.bankName),
+    escapeCSV(r.amount.toFixed(2)),
+    escapeCSV(r.date),
+    escapeCSV(r.time || ''),
+    escapeCSV(r.senderName || ''),
+    escapeCSV(r.senderAccount || ''),
+    escapeCSV(r.beneficiaryName || ''),
+    escapeCSV(r.beneficiaryAccount || ''),
+    escapeCSV(r.status.toUpperCase()),
+    escapeCSV(r.confidence),
+    escapeCSV(r.notes || ''),
+    escapeCSV(r.fileName),
+    escapeCSV(new Date(r.createdAt).toLocaleString('en-US', { timeZone: 'Asia/Colombo' })),
+  ]);
+
+  const csvContent =
+    '\uFEFF' + // UTF-8 BOM for Excel compatibility
+    [headers.map(escapeCSV).join(','), ...rows.map((row) => row.join(','))].join('\r\n');
+
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.setAttribute('href', url);
+  const dateStr = new Date().toISOString().slice(0, 10);
+  link.setAttribute('download', filename || `PayCheck_LK_Receipts_${dateStr}.csv`);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+};

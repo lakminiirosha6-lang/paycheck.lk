@@ -1,0 +1,6 @@
+{
+  "name": "PayCheck.lk - Sri Lankan Receipt Verifier",
+  "description": "PayCheck.lk - Sri Lanka's #1 Free Receipt Verifier for ComBank, BOC, Sampath, NSB, Peoples, HNB. Verify fake bank slips instantly.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

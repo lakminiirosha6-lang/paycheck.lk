@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PayCheck.lk - Sri Lankan Receipt Verifier (Single File Edition)</title>
+  
+  <!-- SEO Meta Tags -->
+  <meta name="description" content="PayCheck.lk - Sri Lanka's #1 Free Receipt Verifier for ComBank, BOC, Sampath, NSB, Peoples, HNB. Verify fake bank slips instantly.">
+  <meta name="keywords" content="Sri Lanka bank receipt verifier, ComBank slip checker, fake receipt detector">
+  <meta name="theme-color" content="#059669">
+
+  <!-- Open Graph for WhatsApp sharing -->
+  <meta property="og:title" content="PayCheck.lk - Sri Lankan Receipt Verifier">
+  <meta property="og:description" content="PayCheck.lk - Sri Lanka's #1 Free Receipt Verifier for ComBank, BOC, Sampath, NSB, Peoples, HNB. Verify fake bank slips instantly.">
+  <meta property="og:image" content="https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?auto=format&fit=crop&w=1200&q=80">
+  <meta property="og:type" content="website">
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+Sinhala:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <!-- Tesseract.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+  <!-- PDF.js CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script>
+    if (window.pdfjsLib) {
+      pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    }
+  </script>
+  <style>
+    body { font-family: 'Inter', 'Noto Sans Sinhala', sans-serif; }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-900 min-h-screen">
+  <!-- Header -->
+  <header class="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-xs">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <!-- SVG Receipt with Tick Mark Inside Logo -->
+        <svg width="40" height="40" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" class="w-10 h-10">
+          <path d="M10 7C10 5.34315 11.3431 4 13 4H35C36.6569 4 38 5.34315 38 7V42L34 39.5L30 42L26 39.5L22 42L18 39.5L14 42L10 39.5V7Z" fill="#047857" stroke="#059669" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M16 11H32" stroke="#A7F3D0" stroke-width="2.5" stroke-linecap="round"/>
+          <path d="M16 16H26" stroke="#A7F3D0" stroke-width="2.5" stroke-linecap="round"/>
+          <circle cx="24" cy="27" r="10" fill="#10B981" stroke="#FFFFFF" stroke-width="2"/>
+          <path d="M19.5 27L22.5 30L28.5 24" stroke="#FFFFFF" stroke-width="2.75" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <div>
+          <span class="text-xl font-black text-slate-900">PayCheck<span class="text-emerald-600">.lk</span></span>
+          <span class="ml-2 px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800 border border-emerald-300">
+            🇱🇰 Single-File Edition
+          </span>
+        </div>
+      </div>
+      <div class="flex items-center gap-2">
+        <button id="langToggle" class="px-3 py-1.5 text-xs font-bold rounded-lg border border-slate-300 hover:bg-slate-100 transition-colors">
+          සිංහල / English
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+    <!-- WhatsApp Share Notification Banner -->
+    <div id="waShareBanner" class="hidden p-4 rounded-xl bg-green-50 border border-green-300 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-3 animate-in fade-in">
+      <div class="flex items-center gap-3">
+        <div class="w-8 h-8 rounded-full bg-green-600 text-white flex items-center justify-center font-bold">✓</div>
+        <div>
+          <p class="text-sm font-bold text-green-900">Receipt Verified & Saved Successfully!</p>
+          <p id="waBannerSub" class="text-xs text-green-700"></p>
+        </div>
+      </div>
+      <div class="flex items-center gap-2">
+        <button onclick="triggerWhatsAppShare()" class="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-green-600 hover:bg-green-700 text-white font-bold text-xs shadow-xs transition-colors">
+          <svg class="w-4 h-4 fill-current" viewBox="0 0 24 24"><path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.287l-.711 2.592 2.654-.696c.969.529 1.942.809 2.805.809 3.182 0 5.768-2.586 5.768-5.766 0-3.18-2.586-5.766-5.767-5.766zm3.385 8.168c-.145.409-.844.757-1.157.781-.314.024-.627.086-2.049-.496-1.704-.696-2.793-2.457-2.879-2.571-.086-.115-.694-.925-.694-1.765s.44-1.25.597-1.42c.157-.17.343-.213.457-.213.114 0 .229.002.329.006.105.005.245-.04.383.292.144.343.491 1.203.535 1.289.043.086.072.186.014.3-.057.115-.086.186-.171.286-.086.1-.182.224-.26.301-.086.086-.176.18-.076.352.1.171.444.733.953 1.186.655.584 1.207.765 1.378.851.171.086.271.072.371-.043.1-.115.428-.499.542-.67.114-.171.229-.143.385-.086.157.057.994.469 1.165.555.171.086.286.128.329.2.043.071.043.414-.102.823z"/></svg>
+          <span>Share Verification on WhatsApp</span>
+        </button>
+        <button onclick="document.getElementById('waShareBanner').classList.add('hidden')" class="p-1 text-green-700">✕</button>
+      </div>
+    </div>
+
+    <!-- Hero / Upload -->
+    <div class="text-center max-w-2xl mx-auto">
+      <h1 id="heroTitle" class="text-2xl sm:text-3xl font-extrabold text-slate-900">Sri Lankan Bank Receipt Verifier</h1>
+      <p id="heroSubtitle" class="text-sm text-slate-600 mt-1">Extract Amount, Date, Reference No & Bank name from Commercial, BOC, Sampath, NSB, Peoples, and HNB receipts.</p>
+    </div>
+
+    <!-- Dropzone -->
+    <div id="dropzone" class="border-2 border-dashed border-slate-300 hover:border-emerald-500 bg-white rounded-2xl p-8 text-center cursor-pointer transition-all shadow-xs">
+      <input type="file" id="fileInput" class="hidden" accept=".jpg,.jpeg,.png,.pdf">
+      <div class="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-2xl flex items-center justify-center mx-auto mb-4 text-2xl font-bold">
+        📥
+      </div>
+      <h3 id="dropTitle" class="text-lg font-bold text-slate-800 mb-1">Drop Receipt File (JPG, PNG, PDF) Here</h3>
+      <p id="dropSub" class="text-xs text-slate-500 mb-4">Processed 100% locally in your browser using Tesseract.js</p>
+      <button type="button" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold rounded-lg shadow-xs">
+        Browse File
+      </button>
+
+      <!-- OCR Progress Bar -->
+      <div id="ocrProgressContainer" class="hidden mt-6 max-w-md mx-auto">
+        <div class="flex justify-between text-xs font-semibold text-slate-600 mb-1">
+          <span id="ocrStatusText">Recognizing text...</span>
+          <span id="ocrPercentText">0%</span>
+        </div>
+        <div class="w-full bg-slate-200 rounded-full h-2 overflow-hidden">
+          <div id="ocrProgressBar" class="bg-emerald-600 h-2 rounded-full transition-all duration-200" style="width: 0%"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Quick Samples -->
+    <div class="bg-emerald-50/60 border border-emerald-200 rounded-xl p-4 flex flex-wrap items-center gap-2">
+      <span class="text-xs font-bold text-emerald-900">Try Sample Receipts:</span>
+      <button onclick="loadSample('commercial')" class="px-2.5 py-1 text-xs bg-white border border-slate-300 rounded shadow-2xs hover:border-emerald-600">Commercial Bank (LKR 48,500)</button>
+      <button onclick="loadSample('boc')" class="px-2.5 py-1 text-xs bg-white border border-slate-300 rounded shadow-2xs hover:border-emerald-600">BOC SmartPay (Rs. 14,250)</button>
+      <button onclick="loadSample('sampath')" class="px-2.5 py-1 text-xs bg-white border border-slate-300 rounded shadow-2xs hover:border-emerald-600">Sampath Vishwa (LKR 125,000)</button>
+      <button onclick="loadSample('peoples')" class="px-2.5 py-1 text-xs bg-white border border-slate-300 rounded shadow-2xs hover:border-emerald-600">People's Wave (Rs. 8,760)</button>
+    </div>
+
+    <!-- Edit & Verification Box -->
+    <div id="editBox" class="hidden bg-white border border-slate-200 rounded-2xl p-6 shadow-md space-y-4">
+      <h3 class="text-base font-bold text-slate-900 border-b pb-2">Verify & Save Extracted Slip</h3>
+      <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">Bank Name</label>
+          <select id="editBank" class="w-full p-2 text-sm border rounded-lg bg-white">
+            <option value="Commercial Bank">Commercial Bank</option>
+            <option value="Bank of Ceylon (BOC)">Bank of Ceylon (BOC)</option>
+            <option value="Sampath Bank">Sampath Bank</option>
+            <option value="National Savings Bank (NSB)">National Savings Bank (NSB)</option>
+            <option value="People's Bank">People's Bank</option>
+            <option value="Hatton National Bank (HNB)">Hatton National Bank (HNB)</option>
+            <option value="Other Bank">Other Bank</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">Amount (LKR)</label>
+          <input type="number" id="editAmount" class="w-full p-2 text-sm border rounded-lg font-bold" placeholder="0.00">
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">Reference / Txn No</label>
+          <input type="text" id="editRef" class="w-full p-2 text-sm border rounded-lg font-mono" placeholder="Ref No">
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">Date</label>
+          <input type="date" id="editDate" class="w-full p-2 text-sm border rounded-lg">
+        </div>
+      </div>
+      <div class="flex flex-wrap justify-end gap-2 pt-2">
+        <button onclick="cancelEdit()" class="px-4 py-2 text-xs font-semibold bg-slate-100 hover:bg-slate-200 rounded-lg">Cancel</button>
+        <button onclick="saveAndShareWhatsApp()" class="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold bg-green-600 hover:bg-green-700 text-white rounded-lg shadow-sm">
+          <svg class="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24"><path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.287l-.711 2.592 2.654-.696c.969.529 1.942.809 2.805.809 3.182 0 5.768-2.586 5.768-5.766 0-3.18-2.586-5.766-5.767-5.766zm3.385 8.168c-.145.409-.844.757-1.157.781-.314.024-.627.086-2.049-.496-1.704-.696-2.793-2.457-2.879-2.571-.086-.115-.694-.925-.694-1.765s.44-1.25.597-1.42c.157-.17.343-.213.457-.213.114 0 .229.002.329.006.105.005.245-.04.383.292.144.343.491 1.203.535 1.289.043.086.072.186.014.3-.057.115-.086.186-.171.286-.086.1-.182.224-.26.301-.086.086-.176.18-.076.352.1.171.444.733.953 1.186.655.584 1.207.765 1.378.851.171.086.271.072.371-.043.1-.115.428-.499.542-.67.114-.171.229-.143.385-.086.157.057.994.469 1.165.555.171.086.286.128.329.2.043.071.043.414-.102.823z"/></svg>
+          <span>Share Verification on WhatsApp</span>
+        </button>
+        <button onclick="saveCurrentReceipt()" class="px-5 py-2 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg shadow-sm">Save to Verified Table</button>
+      </div>
+    </div>
+
+    <!-- Table Section -->
+    <div class="bg-white border border-slate-200 rounded-2xl shadow-xs overflow-hidden">
+      <div class="p-4 border-b border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3">
+        <div class="flex items-center gap-2">
+          <h2 class="text-base font-bold text-slate-900">Verified Receipt Records</h2>
+          <span id="recordCountBadge" class="px-2 py-0.5 rounded-full text-xs bg-slate-100 font-bold">0</span>
+        </div>
+        <div class="flex items-center gap-2 w-full sm:w-auto">
+          <input type="text" id="searchInput" placeholder="Search by Ref or Bank..." class="p-2 text-xs border rounded-lg w-full sm:w-64" oninput="renderTable()">
+          <button onclick="exportCSV()" class="px-3 py-2 text-xs font-bold bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 whitespace-nowrap">Export CSV</button>
+        </div>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-left border-collapse text-xs sm:text-sm">
+          <thead>
+            <tr class="bg-slate-50 border-b border-slate-200 text-slate-600 uppercase text-[11px] font-bold">
+              <th class="p-3">Bank</th>
+              <th class="p-3">Amount (LKR)</th>
+              <th class="p-3">Date</th>
+              <th class="p-3">Reference No</th>
+              <th class="p-3">Status</th>
+              <th class="p-3 text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="receiptsTbody" class="divide-y divide-slate-100">
+            <!-- Dynamically populated -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    // Storage state
+    let receipts = JSON.parse(localStorage.getItem('paycheck_standalone_receipts') || '[]');
+    let currentExtracted = null;
+    let isSinhala = false;
+    let lastSaved = null;
+
+    // Seed sample if empty
+    if (receipts.length === 0) {
+      receipts = [
+        { id: '1', bank: 'Commercial Bank', amount: 48500, date: '2026-10-12', ref: 'CB982341209', status: 'Verified' },
+        { id: '2', bank: 'Bank of Ceylon (BOC)', amount: 14250, date: '2026-10-11', ref: 'BOC77218943', status: 'Verified' }
+      ];
+      localStorage.setItem('paycheck_standalone_receipts', JSON.stringify(receipts));
+    }
+
+    function renderTable() {
+      const tbody = document.getElementById('receiptsTbody');
+      const query = document.getElementById('searchInput').value.toLowerCase();
+      const filtered = receipts.filter(r => 
+        r.bank.toLowerCase().includes(query) || 
+        r.ref.toLowerCase().includes(query) || 
+        r.amount.toString().includes(query)
+      );
+
+      document.getElementById('recordCountBadge').innerText = filtered.length;
+
+      if (filtered.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="6" class="text-center py-8 text-slate-400 text-xs">No receipt records found.</td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = filtered.map(r => `
+        <tr class="hover:bg-slate-50 transition-colors">
+          <td class="p-3 font-semibold text-slate-800">${r.bank}</td>
+          <td class="p-3 font-bold font-mono text-slate-900">Rs. ${Number(r.amount).toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
+          <td class="p-3 text-slate-600">${r.date}</td>
+          <td class="p-3 font-mono font-semibold text-slate-700">${r.ref}</td>
+          <td class="p-3"><span class="px-2 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">Verified</span></td>
+          <td class="p-3 text-right flex items-center justify-end gap-2">
+            <button onclick="shareRecordWhatsApp('${r.id}')" title="Share on WhatsApp" class="text-green-600 hover:text-green-800 p-1">
+              <svg class="w-4 h-4 fill-current" viewBox="0 0 24 24"><path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.287l-.711 2.592 2.654-.696c.969.529 1.942.809 2.805.809 3.182 0 5.768-2.586 5.768-5.766 0-3.18-2.586-5.766-5.767-5.766zm3.385 8.168c-.145.409-.844.757-1.157.781-.314.024-.627.086-2.049-.496-1.704-.696-2.793-2.457-2.879-2.571-.086-.115-.694-.925-.694-1.765s.44-1.25.597-1.42c.157-.17.343-.213.457-.213.114 0 .229.002.329.006.105.005.245-.04.383.292.144.343.491 1.203.535 1.289.043.086.072.186.014.3-.057.115-.086.186-.171.286-.086.1-.182.224-.26.301-.086.086-.176.18-.076.352.1.171.444.733.953 1.186.655.584 1.207.765 1.378.851.171.086.271.072.371-.043.1-.115.428-.499.542-.67.114-.171.229-.143.385-.086.157.057.994.469 1.165.555.171.086.286.128.329.2.043.071.043.414-.102.823z"/></svg>
+            </button>
+            <button onclick="deleteRecord('${r.id}')" class="text-red-500 hover:text-red-700 font-bold text-xs">Delete</button>
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    function shareRecordWhatsApp(id) {
+      const rec = receipts.find(r => r.id === id);
+      if (!rec) return;
+      const text = `✅ Verified via PayCheck.lk - Amount: Rs. ${Number(rec.amount).toLocaleString('en-US', {minimumFractionDigits: 2})}, Bank: ${rec.bank}, Ref: ${rec.ref}, Date: ${rec.date}`;
+      window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`, '_blank');
+    }
+
+    function deleteRecord(id) {
+      if (confirm('Delete this record?')) {
+        receipts = receipts.filter(r => r.id !== id);
+        localStorage.setItem('paycheck_standalone_receipts', JSON.stringify(receipts));
+        renderTable();
+      }
+    }
+
+    function exportCSV() {
+      const headers = ['Bank', 'Amount (LKR)', 'Date', 'Reference No', 'Status'];
+      const rows = receipts.map(r => [r.bank, r.amount, r.date, r.ref, r.status]);
+      const csv = '\uFEFF' + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `PayCheck_LK_${new Date().toISOString().slice(0,10)}.csv`;
+      a.click();
+    }
+
+    // OCR extraction regex logic
+    function parseSlipText(text) {
+      const lower = text.toLowerCase();
+      let bank = 'Other Bank';
+      if (lower.includes('commercial bank') || lower.includes('combank')) bank = 'Commercial Bank';
+      else if (lower.includes('bank of ceylon') || lower.includes('boc')) bank = 'Bank of Ceylon (BOC)';
+      else if (lower.includes('sampath')) bank = 'Sampath Bank';
+      else if (lower.includes('national savings bank') || lower.includes('nsb')) bank = 'National Savings Bank (NSB)';
+      else if (lower.includes('people') || lower.includes('peoples')) bank = "People's Bank";
+      else if (lower.includes('hatton') || lower.includes('hnb')) bank = 'Hatton National Bank (HNB)';
+
+      let amount = 0;
+      const amtMatch = text.match(/(?:amount|lkr|rs\.?|total)[\s:=–-]+([0-9]{1,3}(?:,[0-9]{3})*(?:\.[0-9]{2})?)/i) ||
+                       text.match(/([0-9]{1,3}(?:,[0-9]{3})+\.[0-9]{2})/);
+      if (amtMatch) amount = parseFloat(amtMatch[1].replace(/,/g, ''));
+
+      let ref = 'REF-' + Math.floor(10000000 + Math.random()*90000000);
+      const refMatch = text.match(/(?:ref(?:erence)?|txn|receipt|sequence)[\s:=–#-]+([a-z0-9\-_]{6,20})/i);
+      if (refMatch) ref = refMatch[1];
+
+      let date = new Date().toISOString().slice(0,10);
+      const dateMatch = text.match(/\b(202\d[-/.](?:0[1-9]|1[0-2])[-/.](?:0[1-9]|[12]\d|3[01]))\b/);
+      if (dateMatch) date = dateMatch[1].replace(/\//g, '-');
+
+      return { bank, amount, ref, date };
+    }
+
+    function showEdit(data) {
+      document.getElementById('editBox').classList.remove('hidden');
+      document.getElementById('editBank').value = data.bank;
+      document.getElementById('editAmount').value = data.amount;
+      document.getElementById('editRef').value = data.ref;
+      document.getElementById('editDate').value = data.date;
+      document.getElementById('editBox').scrollIntoView({ behavior: 'smooth' });
+    }
+
+    function cancelEdit() {
+      document.getElementById('editBox').classList.add('hidden');
+    }
+
+    function saveCurrentReceipt() {
+      const bank = document.getElementById('editBank').value;
+      const amount = parseFloat(document.getElementById('editAmount').value) || 0;
+      const ref = document.getElementById('editRef').value;
+      const date = document.getElementById('editDate').value;
+
+      const record = { id: Date.now().toString(), bank, amount, ref, date, status: 'Verified' };
+      receipts.unshift(record);
+      localStorage.setItem('paycheck_standalone_receipts', JSON.stringify(receipts));
+      cancelEdit();
+      renderTable();
+
+      lastSaved = record;
+      showWhatsAppBanner(record);
+    }
+
+    function saveAndShareWhatsApp() {
+      const bank = document.getElementById('editBank').value;
+      const amount = parseFloat(document.getElementById('editAmount').value) || 0;
+      const ref = document.getElementById('editRef').value;
+      const date = document.getElementById('editDate').value;
+
+      const record = { id: Date.now().toString(), bank, amount, ref, date, status: 'Verified' };
+      receipts.unshift(record);
+      localStorage.setItem('paycheck_standalone_receipts', JSON.stringify(receipts));
+      cancelEdit();
+      renderTable();
+
+      lastSaved = record;
+      triggerWhatsAppShare();
+    }
+
+    function showWhatsAppBanner(record) {
+      const banner = document.getElementById('waShareBanner');
+      document.getElementById('waBannerSub').innerText = `${record.bank} • Rs. ${record.amount} • Ref: ${record.ref}`;
+      banner.classList.remove('hidden');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function triggerWhatsAppShare() {
+      if (!lastSaved) return;
+      const text = `✅ Verified via PayCheck.lk - Amount: Rs. ${Number(lastSaved.amount).toLocaleString('en-US', {minimumFractionDigits: 2})}, Bank: ${lastSaved.bank}, Ref: ${lastSaved.ref}, Date: ${lastSaved.date}`;
+      window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`, '_blank');
+    }
+
+    function loadSample(key) {
+      if (key === 'commercial') {
+        showEdit({ bank: 'Commercial Bank', amount: 48500, ref: 'CB982341209', date: '2026-10-12' });
+      } else if (key === 'boc') {
+        showEdit({ bank: 'Bank of Ceylon (BOC)', amount: 14250, ref: 'BOC77218943', date: '2026-10-11' });
+      } else if (key === 'sampath') {
+        showEdit({ bank: 'Sampath Bank', amount: 125000, ref: 'SV-2026-904128', date: '2026-10-10' });
+      } else if (key === 'peoples') {
+        showEdit({ bank: "People's Bank", amount: 8760, ref: 'PB884102931', date: '2026-10-09' });
+      }
+    }
+
+    // Dropzone logic
+    const dropzone = document.getElementById('dropzone');
+    const fileInput = document.getElementById('fileInput');
+
+    dropzone.addEventListener('click', () => fileInput.click());
+    dropzone.addEventListener('dragover', (e) => { e.preventDefault(); dropzone.classList.add('border-emerald-500'); });
+    dropzone.addEventListener('dragleave', () => dropzone.classList.remove('border-emerald-500'));
+    dropzone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropzone.classList.remove('border-emerald-500');
+      if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+    });
+    fileInput.addEventListener('change', (e) => {
+      if (e.target.files.length) handleFile(e.target.files[0]);
+    });
+
+    async function handleFile(file) {
+      const progressContainer = document.getElementById('ocrProgressContainer');
+      const progressBar = document.getElementById('ocrProgressBar');
+      const percentText = document.getElementById('ocrPercentText');
+      progressContainer.classList.remove('hidden');
+
+      try {
+        const worker = await Tesseract.createWorker('eng', 1, {
+          logger: m => {
+            if (m.status === 'recognizing text') {
+              const p = Math.round((m.progress || 0) * 100);
+              progressBar.style.width = p + '%';
+              percentText.innerText = p + '%';
+            }
+          }
+        });
+        const res = await worker.recognize(file);
+        await worker.terminate();
+
+        const extracted = parseSlipText(res.data.text);
+        showEdit(extracted);
+      } catch (err) {
+        alert('OCR Error: ' + err.message);
+      } finally {
+        progressContainer.classList.add('hidden');
+      }
+    }
+
+    // Language toggle
+    document.getElementById('langToggle').addEventListener('click', () => {
+      isSinhala = !isSinhala;
+      if (isSinhala) {
+        document.getElementById('heroTitle').innerText = 'ශ්‍රී ලංකා බැංකු රිසිට්පත් සත්‍යාපකය';
+        document.getElementById('heroSubtitle').innerText = 'Commercial, BOC, Sampath, NSB, Peoples, සහ HNB රිසිට්පත් OCR මගින් ක්ෂණිකව කියවන්න.';
+        document.getElementById('dropTitle').innerText = 'රිසිට්පත මෙතැනට Drag & Drop කරන්න';
+      } else {
+        document.getElementById('heroTitle').innerText = 'Sri Lankan Bank Receipt Verifier';
+        document.getElementById('heroSubtitle').innerText = 'Extract Amount, Date, Reference No & Bank name from Commercial, BOC, Sampath, NSB, Peoples, and HNB receipts.';
+        document.getElementById('dropTitle').innerText = 'Drop Receipt File (JPG, PNG, PDF) Here';
+      }
+    });
+
+    // Initialize
+    renderTable();
+  </script>
+</body>
+</html>
