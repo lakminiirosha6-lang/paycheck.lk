@@ -137,10 +137,63 @@ export const SUPPORTED_BANKS: Record<SupportedBankId, BankConfig> = {
       /ref(?:erence)?\s*(?:no|#)?[:.\s]+([a-z0-9]{8,20})/i,
     ],
   },
+  ez_cash: {
+    id: 'ez_cash',
+    nameEn: 'eZ Cash (Dialog)',
+    nameSi: 'eZ Cash (ඩයලොග්)',
+    code: 'EZCASH',
+    primaryColor: '#dc2626',
+    badgeBg: 'bg-rose-100 dark:bg-rose-950/40',
+    badgeText: 'text-rose-700 dark:text-rose-300 border-rose-300',
+    keywords: [
+      'ez cash',
+      'ezcash',
+      'dialog ez',
+      'dialog ez cash',
+      'mudal yaweema',
+      'labunu mudala',
+      'shuddha geweema',
+      'sewa gasthu',
+      'sewa gasthuwa',
+      'omobio',
+      'dialogsc',
+      'best mobile',
+      'dialog axiata',
+      'ez send money',
+      'send money',
+    ],
+    refPatterns: [
+      /rn[:.\s]*([0-9]{10,24})/i,
+      /transaction\s*id[:.\s]+([0-9]{10,24})/i,
+      /txn\s*id[:.\s]+([0-9]{10,24})/i,
+      /ref(?:erence)?\s*(?:no|#)?[:.\s]+([0-9a-z]{8,24})/i,
+    ],
+  },
+  mcash: {
+    id: 'mcash',
+    nameEn: 'mCash (Mobitel)',
+    nameSi: 'mCash (මොබිටෙල්)',
+    code: 'MCASH',
+    primaryColor: '#059669',
+    badgeBg: 'bg-teal-100 dark:bg-teal-950/40',
+    badgeText: 'text-teal-700 dark:text-teal-300 border-teal-300',
+    keywords: [
+      'mcash',
+      'm-cash',
+      'mobitel mcash',
+      'mobitel',
+      'slt mobitel',
+    ],
+    refPatterns: [
+      /txn\s*(?:no|id)?[:.\s]+([0-9a-z]{8,24})/i,
+      /ref(?:erence)?\s*(?:no|#)?[:.\s]+([0-9a-z]{8,24})/i,
+      /receipt\s*no[:.\s]+([0-9a-z]{8,24})/i,
+    ],
+  },
   other: {
     id: 'other',
     nameEn: 'Other Bank / Slip',
-    nameSi: 'වෙනත් බැංකුවක්',
+    nameSi: 'වෙනත් බැංකුවක් / Wallet',
     code: 'OTHER',
     primaryColor: '#64748b',
     badgeBg: 'bg-slate-100 dark:bg-slate-800',
@@ -163,6 +216,47 @@ export interface SampleReceipt {
 }
 
 export const SAMPLE_RECEIPTS: SampleReceipt[] = [
+  {
+    id: 'sample-ezcash-sms',
+    bankId: 'ez_cash',
+    titleEn: 'eZ Cash SMS (Dialog Mudal Yaweema)',
+    titleSi: 'eZ Cash SMS (ඩයලොග් මුදල් යැවීම)',
+    fileName: 'ezcash_sms_screenshot.jpg',
+    sampleText: `Mudal yaweema
+Geweema: 778459896
+13/10/2026 19:03
+Rs.1400.00 Current Balance: Rs.68.00
+sewa gasthuwa: Rs.0.00
+Shuddha geweema: Rs.1400.00
+RN:20261013235486`,
+  },
+  {
+    id: 'sample-ezcash-app',
+    bankId: 'ez_cash',
+    titleEn: 'eZ Cash App (Transaction Successful)',
+    titleSi: 'eZ Cash ඇප් රිසිට්පත (සාර්ථකයි)',
+    fileName: 'ezcash_app_receipt.jpg',
+    sampleText: `Transaction Successful
+Total Amount Rs. 1,200.00
+Payment Method eZ Cash 768303937
+Mobile Number 077 845 9896
+Date and Time 06/10/2026 | 2:56 PM
+Transaction ID 179127879010231626
+You will receive a notification once the payment is completed.`,
+  },
+  {
+    id: 'sample-ezcash-pos',
+    bankId: 'ez_cash',
+    titleEn: 'eZ Cash POS Thermal Slip (Shop Bill)',
+    titleSi: 'eZ Cash POS මුද්‍රිත බිල (කඩේ ස්ලිප්)',
+    fileName: 'ezcash_pos_print.jpg',
+    sampleText: `BEST MOBILE NITTAMBUWA
+Date: 2026:10:02 Time: 14:02
+Dialog EZ send money
+Number: 0763461254
+Amount: 600
+Thank You`,
+  },
   {
     id: 'sample-combank',
     bankId: 'commercial',

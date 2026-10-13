@@ -253,6 +253,114 @@ Draft the optimal WhatsApp auto-reply to send to this customer:`;
   }
 });
 
+// API Route: AI Receipt Extractor (Supports eZ Cash SMS, App screenshots, Thermal slips & Bank slips)
+app.post('/api/ai/extract-receipt', async (req: Request, res: Response) => {
+  try {
+    const { text, imageBase64, mimeType } = req.body;
+
+    if (!text && !imageBase64) {
+      return res.status(400).json({ success: false, error: 'Provide text or imageBase64' });
+    }
+
+    const systemInstruction = `You are an expert Sri Lankan payment slip & receipt parser for PayCheck.lk.
+You accurately extract details from Sri Lankan bank slips, mobile wallet transactions, and merchant printouts.
+Supported entities:
+- Mobile Wallets: 'ez_cash' (Dialog eZ Cash SMS, MyDialog App screenshots, POS receipts), 'mcash' (Mobitel mCash)
+- Banks: 'commercial' (Commercial Bank), 'boc' (Bank of Ceylon), 'sampath' (Sampath Bank), 'nsb' (NSB), 'peoples' (People's Bank), 'hnb' (Hatton National Bank), 'other'
+
+CRITICAL EZ CASH RULES:
+1. eZ Cash SMS format (Dialog):
+   - 'Shuddha geweema' or 'Labunu mudala' is the net payment amount. DO NOT pick 'Current Balance' as amount.
+   - 'RN:...' is the reference number.
+   - 'Geweema: <phone>' or '07xxxxxxxx' is customer phone.
+2. eZ Cash App (MyDialog):
+   - 'Total Amount Rs. ...' is amount.
+   - 'Transaction ID ...' is ref number.
+   - 'Mobile Number ...' is customer phone.
+   - 'Payment Method eZ Cash ...' is sender account.
+3. POS / Merchant Printouts:
+   - Header like 'BEST MOBILE NITTAMBUWA' or 'COMMUNICATION' is merchant/beneficiary name.
+   - 'Dialog EZ send money' -> 'ez_cash'.
+   - 'Number: 07xxxxxxxx' -> customerPhone.
+   - 'Amount: 600' -> amount.
+
+Always respond ONLY with a clean JSON object conforming to:
+{
+  "bankId": "ez_cash" | "mcash" | "commercial" | "boc" | "sampath" | "nsb" | "peoples" | "hnb" | "other",
+  "bankName": string,
+  "amount": number,
+  "currency": "LKR",
+  "date": "YYYY-MM-DD",
+  "time": string,
+  "refNumber": string,
+  "customerPhone": string,
+  "senderName": string,
+  "senderAccount": string,
+  "beneficiaryName": string,
+  "beneficiaryAccount": string,
+  "confidence": number,
+  "notes": string
+}`;
+
+    const promptText = text
+      ? `Extract payment receipt details from this text:\n\n${text}`
+      : `Extract payment receipt details from this image.`;
+
+    const contents: any = imageBase64
+      ? [
+          {
+            inlineData: {
+              data: imageBase64.replace(/^data:[^;]+;base64,/, ''),
+              mimeType: mimeType || 'image/jpeg',
+            },
+          },
+          promptText,
+        ]
+      : promptText;
+
+    const models = ['gemini-3.8-flash', 'gemini-flash-latest', 'gemini-3.1-flash-lite'];
+    let rawOutput = '';
+
+    for (const model of models) {
+      try {
+        const response = await ai.models.generateContent({
+          model,
+          contents,
+          config: {
+            systemInstruction,
+            temperature: 0.1,
+            responseMimeType: 'application/json',
+          },
+        });
+        const out = response.text?.trim();
+        if (out) {
+          rawOutput = out;
+          break;
+        }
+      } catch (err: any) {
+        console.warn(`Extraction attempt with ${model} failed, trying next...`, err.message);
+      }
+    }
+
+    if (!rawOutput) {
+      return res.status(503).json({ success: false, error: 'AI models unavailable for extraction' });
+    }
+
+    try {
+      const parsed = JSON.parse(rawOutput);
+      return res.json({ success: true, data: parsed });
+    } catch {
+      // Clean JSON markers if present
+      const cleaned = rawOutput.replace(/```(?:json)?/g, '').trim();
+      const parsed = JSON.parse(cleaned);
+      return res.json({ success: true, data: parsed });
+    }
+  } catch (err: any) {
+    console.error('Error in /api/ai/extract-receipt:', err);
+    return res.status(500).json({ success: false, error: err.message || 'Extraction failed' });
+  }
+});
+
 // Mount Vite in development or serve static in production
 async function startServer() {
   if (process.env.NODE_ENV !== 'production') {

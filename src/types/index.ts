@@ -5,6 +5,8 @@ export type SupportedBankId =
   | 'nsb'
   | 'peoples'
   | 'hnb'
+  | 'ez_cash'
+  | 'mcash'
   | 'other';
 
 export interface BankConfig {

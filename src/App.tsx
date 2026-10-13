@@ -146,6 +146,18 @@ export default function App() {
     showToast(`Loaded sample slip: ${extracted.bankName}`);
   };
 
+  // Handle pasted SMS or text
+  const handleTextSubmitted = (text: string, title: string = 'eZ Cash / SMS Slip') => {
+    const extracted = extractReceiptFields(text, 98);
+    setActiveEditorData({
+      extracted,
+      previewUrl: undefined,
+      fileName: 'ez_cash_sms.txt',
+      fileSize: text.length,
+    });
+    showToast(`Extracted slip: ${extracted.bankName} - Rs. ${extracted.amountFormatted || '0'}`);
+  };
+
   // Save verified receipt
   const handleSaveReceipt = (record: ReceiptRecord) => {
     setReceipts((prev) => [record, ...prev]);
