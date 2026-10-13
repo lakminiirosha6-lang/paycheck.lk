@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import {
   UploadCloud,
   FileText,
@@ -9,16 +9,24 @@ import {
   Smartphone,
   CheckCircle2,
   ArrowRight,
+  ExternalLink,
+  Copy,
+  Check,
+  Trash2,
+  Send,
+  Plus,
 } from 'lucide-react';
 import { TRANSLATIONS } from '../constants/translations';
-import { Language } from '../types';
+import { Language, ReceiptRecord } from '../types';
 import { SUPPORTED_BANKS, SAMPLE_RECEIPTS, SampleReceipt } from '../constants/banks';
+import { getStoredWhatsAppReceipts, saveWhatsAppReceiptsToStorage } from '../services/storage';
 
 interface DropZoneProps {
   lang: Language;
   onFileSelected: (file: File) => void;
   onSampleSelected: (sample: SampleReceipt) => void;
   onTextSubmitted?: (text: string, title?: string) => void;
+  onImportWhatsAppReceipt?: (receipt: ReceiptRecord) => void;
   isProcessing: boolean;
 }
 
@@ -27,6 +35,7 @@ export const DropZone: React.FC<DropZoneProps> = ({
   onFileSelected,
   onSampleSelected,
   onTextSubmitted,
+  onImportWhatsAppReceipt,
   isProcessing,
 }) => {
   const t = TRANSLATIONS[lang];
@@ -35,6 +44,14 @@ export const DropZone: React.FC<DropZoneProps> = ({
   const [isDragOver, setIsDragOver] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [pastedSmsText, setPastedSmsText] = useState('');
+
+  // WhatsApp Receipts Inbox state
+  const [waReceipts, setWaReceipts] = useState<any[]>(getStoredWhatsAppReceipts());
+  const [showConnectModal, setShowConnectModal] = useState(false);
+  const [copiedUrl, setCopiedUrl] = useState(false);
+  const [testSimulating, setTestSimulating] = useState(false);
+
+  const webhookUrl = 'https://lakminiirosha6-lang.github.io/paycheck.lk/api/webhook';
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
@@ -96,6 +113,74 @@ export const DropZone: React.FC<DropZoneProps> = ({
     }
   };
 
+  const handleCopyWebhook = () => {
+    navigator.clipboard.writeText(webhookUrl);
+    setCopiedUrl(true);
+    setTimeout(() => setCopiedUrl(false), 2000);
+  };
+
+  const handleSimulateWaWebhook = () => {
+    setTestSimulating(true);
+    setTimeout(() => {
+      const newWa = {
+        id: `wa-${Date.now()}`,
+        amount: 4500,
+        amountFormatted: '4,500.00',
+        currency: 'LKR',
+        date: new Date().toISOString().split('T')[0],
+        refNumber: `WA-TXN-${Math.floor(Math.random() * 90000 + 10000)}`,
+        senderName: 'Nadeesha Perera',
+        customerPhone: '0714422119',
+        bankName: 'eZ Cash Mobile Wallet',
+        bankId: 'ez_cash',
+        source: 'whatsapp_webhook',
+        createdAt: new Date().toISOString(),
+        rawOcrText: 'Dialog eZ Cash Transfer Rs. 4,500.00 Ref: WA-TXN From: Nadeesha Perera (0714422119)',
+      };
+      const updated = [newWa, ...waReceipts];
+      setWaReceipts(updated);
+      saveWhatsAppReceiptsToStorage(updated);
+      setTestSimulating(false);
+    }, 800);
+  };
+
+  const handleImportWaItem = (item: any) => {
+    if (onImportWhatsAppReceipt) {
+      const record: ReceiptRecord = {
+        id: `rec-wa-${Date.now()}`,
+        bankId: item.bankId || 'ez_cash',
+        bankName: item.bankName || 'WhatsApp eZ Cash',
+        amount: item.amount,
+        amountFormatted: item.amountFormatted,
+        currency: 'LKR',
+        date: item.date,
+        time: '12:00 PM',
+        refNumber: item.refNumber,
+        senderName: item.senderName,
+        senderAccount: item.customerPhone,
+        beneficiaryName: 'Merchant PayCheck.lk',
+        status: 'verified',
+        notes: 'Imported from WhatsApp Receipts Inbox',
+        rawOcrText: item.rawOcrText,
+        confidence: 98,
+        fileName: 'whatsapp_slip.jpg',
+        fileSize: 45000,
+        createdAt: new Date().toISOString(),
+      };
+      onImportWhatsAppReceipt(record);
+      // Remove from wa inbox
+      const updated = waReceipts.filter((r) => r.id !== item.id);
+      setWaReceipts(updated);
+      saveWhatsAppReceiptsToStorage(updated);
+    }
+  };
+
+  const handleDeleteWaItem = (id: string) => {
+    const updated = waReceipts.filter((r) => r.id !== id);
+    setWaReceipts(updated);
+    saveWhatsAppReceiptsToStorage(updated);
+  };
+
   const quickSmsSamples = [
     {
       label: 'eZ Cash SMS 1 (Rs. 1,400)',
@@ -107,26 +192,210 @@ export const DropZone: React.FC<DropZoneProps> = ({
     },
     {
       label: 'eZ Cash App (Rs. 1,200)',
-      text: `Transaction Successful
-Total Amount Rs. 1,200.00
-Payment Method eZ Cash 768303937
-Mobile Number 077 845 9896
-Date and Time 06/10/2026 | 2:56 PM
-Transaction ID 179127879010231626`,
+      text: `Transaction Successful\nTotal Amount Rs. 1,200.00\nPayment Method eZ Cash 768303937\nMobile Number 077 845 9896\nDate and Time 06/10/2026 | 2:56 PM\nTransaction ID 179127879010231626`,
     },
     {
       label: 'POS Thermal (Rs. 600)',
-      text: `BEST MOBILE NITTAMBUWA
-Date: 2026:10:02 Time: 14:02
-Dialog EZ send money
-Number: 0763461254
-Amount: 600
-Thank You`,
+      text: `BEST MOBILE NITTAMBUWA\nDate: 2026:10:02 Time: 14:02\nDialog EZ send money\nNumber: 0763461254\nAmount: 600\nThank You`,
     },
   ];
 
   return (
     <div className="space-y-6">
+      {/* Top Bar with Connect WhatsApp Button */}
+      <div className="flex items-center justify-between flex-wrap gap-3 bg-gradient-to-r from-emerald-900 to-green-800 text-white p-4 sm:p-5 rounded-2xl shadow-md">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-white/20 backdrop-blur-md flex items-center justify-center text-white">
+            <MessageSquare className="w-6 h-6" />
+          </div>
+          <div>
+            <h3 className="text-sm sm:text-base font-bold">
+              {lang === 'si' ? 'WhatsApp Auto-Receipts & Webhook Integration' : 'WhatsApp Auto-Receipts & Webhook Integration'}
+            </h3>
+            <p className="text-xs text-emerald-100">
+              {lang === 'si'
+                ? 'පාරිභෝගිකයන් එවන eZ Cash / Bank රිසිට්පත් ස්වයංක්‍රීයව පිළිගැනීමට සම්බන්ධ වන්න'
+                : 'Automatically receive mobile wallet and bank slips sent by customers via WhatsApp'}
+            </p>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => setShowConnectModal(true)}
+          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold bg-white text-emerald-800 hover:bg-emerald-50 shadow-sm transition-all"
+        >
+          <Smartphone className="w-4 h-4 text-emerald-600" />
+          <span>Connect WhatsApp</span>
+        </button>
+      </div>
+
+      {/* WhatsApp Connect Instructions Modal */}
+      {showConnectModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-xs">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl max-w-lg w-full p-6 space-y-4 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-emerald-100 dark:bg-emerald-950 text-emerald-600 flex items-center justify-center font-bold">
+                  <Smartphone className="w-5 h-5" />
+                </div>
+                <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                  Connect WhatsApp Account
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowConnectModal(false)}
+                className="text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 text-sm font-bold"
+              >
+                ✕
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-600 dark:text-slate-400">
+              To connect your WhatsApp account and receive instant AI-extracted auto-receipts into PayCheck.lk, add the following webhook URL to your WhatsApp bot / Cloud API / Baileys webhook settings:
+            </p>
+
+            <div className="p-3 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 flex items-center justify-between gap-2">
+              <span className="text-xs font-mono text-emerald-700 dark:text-emerald-300 truncate select-all">
+                {webhookUrl}
+              </span>
+              <button
+                type="button"
+                onClick={handleCopyWebhook}
+                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs flex-shrink-0 transition-colors"
+              >
+                {copiedUrl ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                <span>{copiedUrl ? 'Copied!' : 'Copy'}</span>
+              </button>
+            </div>
+
+            <div className="space-y-2 text-xs text-slate-600 dark:text-slate-400 bg-emerald-50/60 dark:bg-emerald-950/30 p-3 rounded-xl border border-emerald-200 dark:border-emerald-900/50">
+              <p className="font-bold text-emerald-900 dark:text-emerald-200">Webhook Requirements:</p>
+              <ul className="list-disc pl-4 space-y-1">
+                <li>Accepts POST requests with <code className="font-mono text-[11px] bg-white dark:bg-slate-900 px-1 py-0.5 rounded">{'{ imageUrl, from }'}</code></li>
+                <li>Uses Gemini Vision (gemini-1.5-flash) to OCR receipt images.</li>
+                <li>Extracts amount, date, transaction ID, and sender name automatically.</li>
+              </ul>
+            </div>
+
+            <div className="flex items-center justify-between pt-2">
+              <button
+                type="button"
+                onClick={handleSimulateWaWebhook}
+                disabled={testSimulating}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 transition-colors"
+              >
+                {testSimulating ? <Sparkles className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
+                <span>{testSimulating ? 'Simulating...' : 'Simulate Test WhatsApp Receipt'}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setShowConnectModal(false)}
+                className="px-4 py-2 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white"
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* WhatsApp Receipts Inbox Section */}
+      <div className="rounded-2xl border border-emerald-300 dark:border-emerald-800/80 bg-white dark:bg-slate-900 p-5 shadow-sm space-y-4">
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-emerald-100 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold">
+              <MessageSquare className="w-4 h-4" />
+            </div>
+            <div>
+              <h4 className="text-sm sm:text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <span>WhatsApp Receipts Inbox</span>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300">
+                  {waReceipts.length} New
+                </span>
+              </h4>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                {lang === 'si'
+                  ? 'WhatsApp හරහා ලැබුණු ස්ලිප් පින්තූර OCR මගින් කියවා තහවුරු කිරීමට සූදානම් කර ඇත'
+                  : 'Incoming receipts received via webhook from WhatsApp waiting for merchant review & verification'}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleSimulateWaWebhook}
+              disabled={testSimulating}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-50 dark:bg-emerald-950/60 hover:bg-emerald-100 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 transition-colors"
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>Simulate Webhook Slip</span>
+            </button>
+          </div>
+        </div>
+
+        {waReceipts.length === 0 ? (
+          <div className="text-center py-8 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-dashed border-slate-300 dark:border-slate-700">
+            <MessageSquare className="w-8 h-8 mx-auto text-slate-400 mb-2" />
+            <p className="text-xs font-bold text-slate-700 dark:text-slate-300">No WhatsApp receipts in inbox.</p>
+            <p className="text-[11px] text-slate-500 mt-1">Connect your WhatsApp webhook or click "Simulate Webhook Slip" to test.</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {waReceipts.map((item) => (
+              <div
+                key={item.id}
+                className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/50 flex flex-col justify-between space-y-3"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <span className="inline-block px-2 py-0.5 rounded text-[10px] font-black uppercase bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 mb-1">
+                      {item.bankName || 'WhatsApp eZ Cash'}
+                    </span>
+                    <h5 className="text-sm font-bold text-slate-900 dark:text-white">
+                      Rs. {item.amountFormatted || item.amount}
+                    </h5>
+                    <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">
+                      Sender: <span className="font-semibold text-slate-800 dark:text-slate-200">{item.senderName}</span> ({item.customerPhone})
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-[11px] font-mono text-slate-500">{item.refNumber}</span>
+                    <p className="text-[10px] text-slate-400">{item.date}</p>
+                  </div>
+                </div>
+
+                <div className="text-[11px] font-mono text-slate-500 dark:text-slate-400 bg-white dark:bg-slate-900 p-2 rounded-lg border border-slate-200 dark:border-slate-800 truncate">
+                  {item.rawOcrText}
+                </div>
+
+                <div className="flex items-center justify-end gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteWaItem(item.id)}
+                    className="p-1.5 text-slate-400 hover:text-red-600 rounded-lg transition-colors"
+                    title="Delete"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleImportWaItem(item)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs transition-colors"
+                  >
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    <span>Import to Verified Slips</span>
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
       {/* Tab Switcher: Upload File vs Paste SMS */}
       <div className="flex items-center justify-center p-1 bg-slate-100 dark:bg-slate-800 rounded-xl max-w-md mx-auto border border-slate-200 dark:border-slate-700">
         <button

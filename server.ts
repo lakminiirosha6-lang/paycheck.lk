@@ -3,6 +3,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 import { GoogleGenAI } from '@google/genai';
+import { handleWhatsAppWebhook } from './api/whatsapp-webhook';
 
 dotenv.config();
 
@@ -424,6 +425,11 @@ Draft the optimal WhatsApp auto-reply to send to this customer:`;
     return res.status(500).json({ success: false, error: error.message || 'Webhook processing failed' });
   }
 });
+
+// WhatsApp Webhook routes for Receipt OCR & Auto-Processing
+app.post('/api/whatsapp-webhook', handleWhatsAppWebhook);
+app.post('/api/whatsapp/webhook', handleWhatsAppWebhook);
+app.post('/api/webhook', handleWhatsAppWebhook);
 
 // Mount Vite in development or serve static in production
 async function startServer() {

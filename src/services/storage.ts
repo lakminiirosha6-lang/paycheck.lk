@@ -164,3 +164,44 @@ export const exportReceiptsToCSV = (receipts: ReceiptRecord[], filename?: string
   document.body.removeChild(link);
   URL.revokeObjectURL(url);
 };
+
+const WHATSAPP_RECEIPTS_KEY = 'whatsapp_receipts';
+
+export const getStoredWhatsAppReceipts = (): any[] => {
+  try {
+    const data = localStorage.getItem(WHATSAPP_RECEIPTS_KEY);
+    if (data) return JSON.parse(data);
+  } catch (e) {
+    console.error('Failed to load whatsapp_receipts:', e);
+  }
+  const sampleWa = [
+    {
+      id: 'wa-sample-1',
+      amount: 2500,
+      amountFormatted: '2,500.00',
+      currency: 'LKR',
+      date: new Date().toISOString().split('T')[0],
+      refNumber: 'WA20261013778',
+      senderName: 'Kasun Bandara',
+      customerPhone: '0778459896',
+      bankName: 'eZ Cash Mobile',
+      bankId: 'ez_cash',
+      source: 'whatsapp_webhook',
+      createdAt: new Date().toISOString(),
+      rawOcrText: 'Dialog eZ Cash Transfer Successful Rs. 2,500.00 Ref: WA20261013778 From: Kasun Bandara',
+    },
+  ];
+  try {
+    localStorage.setItem(WHATSAPP_RECEIPTS_KEY, JSON.stringify(sampleWa));
+  } catch {}
+  return sampleWa;
+};
+
+export const saveWhatsAppReceiptsToStorage = (receipts: any[]) => {
+  try {
+    localStorage.setItem(WHATSAPP_RECEIPTS_KEY, JSON.stringify(receipts));
+  } catch (e) {
+    console.error('Failed to save whatsapp_receipts:', e);
+  }
+};
+

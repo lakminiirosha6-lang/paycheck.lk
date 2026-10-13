@@ -385,6 +385,8 @@ export default function App() {
             lang={lang}
             onFileSelected={handleFileSelected}
             onSampleSelected={handleSampleSelected}
+            onTextSubmitted={handleTextSubmitted}
+            onImportWhatsAppReceipt={handleSaveReceipt}
             isProcessing={isProcessing}
           />
         )}
