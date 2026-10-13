@@ -868,6 +868,37 @@ export const WhatsAppAiModal: React.FC<WhatsAppAiModalProps> = ({
                     className="w-full p-2.5 text-xs sm:text-sm rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800"
                   />
                 </div>
+
+                {/* WhatsApp Webhook Connection Info */}
+                <div className="p-4 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 space-y-2">
+                  <h5 className="text-xs font-bold text-emerald-900 dark:text-emerald-200 flex items-center gap-1.5">
+                    <ExternalLink className="w-4 h-4 text-emerald-600" />
+                    <span>{lang === 'si' ? 'WhatsApp Bot Webhook & API සම්බන්ධතාවය' : 'WhatsApp Bot Webhook & API Integration'}</span>
+                  </h5>
+                  <p className="text-[11px] text-emerald-800 dark:text-emerald-300 leading-relaxed">
+                    {lang === 'si'
+                      ? 'ඔබගේ WhatsApp ගිණුමෙන් හෝ WhatsApp Cloud API / Baileys bot එකෙන් එන පණිවිඩ මෙම Webhook URL එකට යැවීමෙන් Gemini AI මඟින් ස්වයංක්‍රීය පිළිතුරු ලබාගත හැක.'
+                      : 'Connect your WhatsApp Bot, Baileys, or WhatsApp Cloud API webhook to automatically receive Gemini AI auto-replies.'}
+                  </p>
+                  <div className="flex items-center gap-2 pt-1">
+                    <input
+                      type="text"
+                      readOnly
+                      value={`${window.location.origin}/api/whatsapp/webhook`}
+                      className="w-full p-2 text-xs font-mono rounded bg-white dark:bg-slate-900 border border-emerald-300 dark:border-emerald-700 text-slate-700 dark:text-slate-300 select-all"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard.writeText(`${window.location.origin}/api/whatsapp/webhook`);
+                        alert('Webhook URL copied to clipboard!');
+                      }}
+                      className="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded font-bold text-xs whitespace-nowrap"
+                    >
+                      Copy URL
+                    </button>
+                  </div>
+                </div>
               </div>
 
               {settingsSaved && (

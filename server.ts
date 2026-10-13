@@ -361,6 +361,70 @@ Always respond ONLY with a clean JSON object conforming to:
   }
 });
 
+// API Route: WhatsApp Webhook Receiver for automated bot replies (Cloud API / Baileys / Zapier / Make.com)
+app.post('/api/whatsapp/webhook', async (req: Request, res: Response) => {
+  try {
+    const { incomingMessage, customerPhone, customerName, recentReceipts, customRules, language } = req.body;
+
+    if (!incomingMessage) {
+      return res.status(400).json({ success: false, error: 'incomingMessage is required' });
+    }
+
+    const receiptsContext = Array.isArray(recentReceipts) && recentReceipts.length > 0
+      ? recentReceipts.slice(0, 5).map((r: any) => 
+          `- Ref: ${r.refNumber}, Bank: ${r.bankName}, Amount: Rs. ${r.amountFormatted || r.amount}, Date: ${r.date}, Sender: ${r.senderName || ''}`
+        ).join('\n')
+      : 'No verified receipts records found.';
+
+    const systemInstruction = `You are an automated WhatsApp AI Auto-Responder for a Sri Lankan merchant using PayCheck.lk.
+Analyze the customer's incoming message and draft an intelligent, accurate, and reassuring auto-reply.
+- If they ask whether their payment/receipt was received or verified, look at the recent receipts provided in the context to verify if a matching amount or ref exists.
+- If matching receipt exists, enthusiastically confirm it with reference number and thank them.
+- If no match exists or receipt is pending, politely inform them that you are reviewing their slip and will update them shortly.
+- Output clean WhatsApp formatted text (*bold*, emojis ✅, 📦, 🙏).
+- Reply in ${language === 'si' ? 'polite Sinhala (සිංහල)' : 'natural English'} unless the incoming message is clearly in the other language.`;
+
+    const prompt = `Customer Incoming Query: "${incomingMessage}"
+Customer Name: ${customerName || 'Customer'}
+Customer Phone: ${customerPhone || 'Unknown'}
+
+Custom Merchant Rules: ${customRules || 'Be polite, confirm verified payments, and state that orders will be dispatched quickly.'}
+
+Verified Receipts Context:
+${receiptsContext}
+
+Draft the optimal WhatsApp auto-reply to send to this customer:`;
+
+    try {
+      const replyText = await generateWithGeminiFallback(prompt, systemInstruction);
+      return res.json({
+        success: true,
+        reply: replyText,
+        source: 'gemini',
+        timestamp: new Date().toISOString(),
+      });
+    } catch (modelErr: any) {
+      console.warn('Webhook model call failed, using rule-based fallback:', modelErr.message);
+      const fallbackReply = generateRuleBasedAutoReply({
+        incomingMessage,
+        customerName,
+        recentReceipts,
+        customRules,
+        language,
+      });
+      return res.json({
+        success: true,
+        reply: fallbackReply,
+        source: 'fallback',
+        timestamp: new Date().toISOString(),
+      });
+    }
+  } catch (error: any) {
+    console.error('Error in /api/whatsapp/webhook:', error);
+    return res.status(500).json({ success: false, error: error.message || 'Webhook processing failed' });
+  }
+});
+
 // Mount Vite in development or serve static in production
 async function startServer() {
   if (process.env.NODE_ENV !== 'production') {
