@@ -445,7 +445,7 @@ const activePairingSessions: Record<string, PairingSession> = {};
 // API Route: Register 8-Digit Pairing Code with Baileys Client
 app.post('/api/whatsapp/register-pairing-code', async (req: Request, res: Response) => {
   try {
-    const { pairingCode } = req.body;
+    const { pairingCode, phoneNumber } = req.body;
     if (!pairingCode) {
       return res.status(400).json({ success: false, error: 'Pairing code is required' });
     }
@@ -459,14 +459,15 @@ app.post('/api/whatsapp/register-pairing-code', async (req: Request, res: Respon
       code: cleanCode,
       createdAt: Date.now(),
       status: 'waiting',
-      deviceName: 'Mobile WhatsApp Device',
+      deviceName: phoneNumber ? `WhatsApp (${phoneNumber})` : 'Mobile WhatsApp Device',
     };
 
-    console.log(`[Baileys Client] 8-Digit Pairing Code registered: ${cleanCode}. Awaiting user input in WhatsApp app.`);
+    console.log(`[Baileys Client] 8-Digit Pairing Code registered: ${cleanCode} for phone: ${phoneNumber || 'N/A'}. Awaiting user confirmation in WhatsApp.`);
 
     return res.json({
       success: true,
       code: cleanCode,
+      phoneNumber: phoneNumber || null,
       formattedCode: `${cleanCode.slice(0, 4)}-${cleanCode.slice(4)}`,
       status: 'waiting',
       message: 'Pairing code registered with Baileys Client.',
