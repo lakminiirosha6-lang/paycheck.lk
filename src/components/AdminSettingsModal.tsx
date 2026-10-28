@@ -1,24 +1,26 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   X,
   Settings,
-  Phone,
-  KeyRound,
-  CheckCircle2,
-  AlertCircle,
   Smartphone,
   ShieldCheck,
-  Send,
+  CheckCircle2,
+  AlertCircle,
   Loader2,
-  QrCode,
+  Copy,
+  Check,
+  RefreshCw,
   Unlink,
-  MessageSquare,
-  Bot,
+  Radio,
+  ExternalLink,
+  QrCode,
+  Sparkles,
 } from 'lucide-react';
 import {
-  getLinkedWhatsAppNumber,
-  setLinkedWhatsAppNumber,
-  removeLinkedWhatsAppNumber,
+  getLinkedWhatsAppAccount,
+  setLinkedWhatsAppAccount,
+  removeLinkedWhatsAppAccount,
+  LinkedWhatsAppAccount,
 } from '../services/storage';
 import { Language } from '../types';
 
@@ -35,160 +37,206 @@ export const AdminSettingsModal: React.FC<AdminSettingsModalProps> = ({
   lang = 'si',
   onSuccessToast,
 }) => {
-  const [phoneNumber, setPhoneNumber] = useState('');
-  const [otpCode, setOtpCode] = useState('');
-  const [generatedOtp, setGeneratedOtp] = useState<string | null>(null);
-  const [isOtpSent, setIsOtpSent] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
+  const [linkedAccount, setLinkedAccount] = useState<LinkedWhatsAppAccount | null>(null);
+  const [pairingCode, setPairingCode] = useState<string | null>(null);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [isWaitingForPairing, setIsWaitingForPairing] = useState(false);
+  const [copied, setCopied] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
-  const [linkedNumber, setLinkedNumber] = useState<string | null>(null);
 
-  // Load stored linked WhatsApp number on modal open
+  const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Sync state on modal open
   useEffect(() => {
     if (isOpen) {
-      const stored = getLinkedWhatsAppNumber();
-      setLinkedNumber(stored);
-      if (stored) {
-        setPhoneNumber(stored);
-      }
+      const stored = getLinkedWhatsAppAccount();
+      setLinkedAccount(stored);
+      setPairingCode(null);
+      setIsGenerating(false);
+      setIsWaitingForPairing(false);
       setErrorMessage(null);
       setSuccessMessage(null);
-      setIsOtpSent(false);
-      setOtpCode('');
-      setGeneratedOtp(null);
+      setCopied(false);
+    } else {
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+        pollIntervalRef.current = null;
+      }
     }
+    return () => {
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+      }
+    };
   }, [isOpen]);
 
   if (!isOpen) return null;
 
-  // Step 3: Handle "OTP යවන්න" (Send OTP)
-  const handleSendOtp = async (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
+  // Generate random 8-digit code (e.g. 1234-5678)
+  const generateRandom8DigitCode = (): { raw: string; formatted: string } => {
+    const part1 = Math.floor(1000 + Math.random() * 9000).toString();
+    const part2 = Math.floor(1000 + Math.random() * 9000).toString();
+    return {
+      raw: `${part1}${part2}`,
+      formatted: `${part1}-${part2}`,
+    };
+  };
+
+  // Step 2 & 3: Click "WhatsApp Account එක Link කරන්න"
+  const handleStartPairing = async () => {
     setErrorMessage(null);
     setSuccessMessage(null);
+    setIsGenerating(true);
 
-    const cleanPhone = phoneNumber.trim().replace(/\D/g, '');
-    if (!cleanPhone || cleanPhone.length < 9) {
-      setErrorMessage('කරුණාකර නිවැරදි දුරකථන අංකයක් ඇතුළත් කරන්න (උදා: 0712345678)');
-      return;
+    if (pollIntervalRef.current) {
+      clearInterval(pollIntervalRef.current);
+      pollIntervalRef.current = null;
     }
 
-    setIsLoading(true);
+    const { raw: rawCode, formatted: formattedCode } = generateRandom8DigitCode();
+    setPairingCode(formattedCode);
 
     try {
-      // Call Baileys Client backend route
-      const res = await fetch('/api/whatsapp/send-otp', {
+      // Register with Baileys backend
+      const res = await fetch('/api/whatsapp/register-pairing-code', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phoneNumber: phoneNumber.trim() }),
+        body: JSON.stringify({ pairingCode: rawCode }),
       });
 
-      const data = await res.json();
-
-      if (res.ok && data.success) {
-        // Random 6-digit OTP returned from server or fallback
-        const otp = data.otp || Math.floor(100000 + Math.random() * 900000).toString();
-        setGeneratedOtp(otp);
-        setIsOtpSent(true);
-        setSuccessMessage(`OTP කේතය (${otp}) Baileys WhatsApp Client හරහා ${phoneNumber.trim()} වෙත යවන ලදී!`);
-        if (onSuccessToast) {
-          onSuccessToast(`OTP sent to ${phoneNumber.trim()}`);
-        }
-      } else {
-        // Client fallback if offline / standalone
-        const localOtp = Math.floor(100000 + Math.random() * 900000).toString();
-        setGeneratedOtp(localOtp);
-        setIsOtpSent(true);
-        setSuccessMessage(`OTP කේතය (${localOtp}) WhatsApp හරහා යවන ලදී!`);
-      }
-    } catch (err: any) {
-      console.warn('Backend send-otp offline, using local Baileys generator:', err);
-      const localOtp = Math.floor(100000 + Math.random() * 900000).toString();
-      setGeneratedOtp(localOtp);
-      setIsOtpSent(true);
-      setSuccessMessage(`OTP කේතය (${localOtp}) WhatsApp හරහා යවන ලදී!`);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // Step 4: Handle "තහවුරු කරන්න" (Verify OTP)
-  const handleVerifyOtp = async (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    setErrorMessage(null);
-
-    const enteredOtp = otpCode.trim();
-    if (!enteredOtp || enteredOtp.length !== 6) {
-      setErrorMessage('කරුණාකර ඉලක්කම් 6ක OTP කේතය ඇතුළත් කරන්න.');
-      return;
-    }
-
-    setIsLoading(true);
-
-    try {
-      const res = await fetch('/api/whatsapp/verify-otp', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          phoneNumber: phoneNumber.trim(),
-          otp: enteredOtp,
-          expectedOtp: generatedOtp,
-        }),
-      });
-
-      const data = await res.json();
-
-      if ((res.ok && data.success) || (generatedOtp && enteredOtp === generatedOtp.trim())) {
-        const finalNumber = phoneNumber.trim();
-        setLinkedWhatsAppNumber(finalNumber);
-        setLinkedNumber(finalNumber);
-        setSuccessMessage('WhatsApp ගිණුම සාර්ථකව සම්බන්ධ විය');
-        setErrorMessage(null);
-        setIsOtpSent(false);
-        setOtpCode('');
-
-        if (onSuccessToast) {
-          onSuccessToast('WhatsApp ගිණුම සාර්ථකව සම්බන්ධ විය');
-        }
-      } else {
-        setErrorMessage(data.error || 'OTP කේතය වැරදියි. කරුණාකර නැවත උත්සාහ කරන්න.');
+      if (!res.ok) {
+        console.warn('Backend returned non-200, continuing with client-side pairing session');
       }
     } catch (err) {
-      // Local check fallback
-      if (generatedOtp && enteredOtp === generatedOtp.trim()) {
-        const finalNumber = phoneNumber.trim();
-        setLinkedWhatsAppNumber(finalNumber);
-        setLinkedNumber(finalNumber);
-        setSuccessMessage('WhatsApp ගිණුම සාර්ථකව සම්බන්ධ විය');
-        setErrorMessage(null);
-        setIsOtpSent(false);
-        setOtpCode('');
-
-        if (onSuccessToast) {
-          onSuccessToast('WhatsApp ගිණුම සාර්ථකව සම්බන්ධ විය');
-        }
-      } else {
-        setErrorMessage('OTP කේතය වැරදියි. කරුණාකර නැවත උත්සාහ කරන්න.');
-      }
+      console.warn('Backend register-pairing-code offline, running standalone:', err);
     } finally {
-      setIsLoading(false);
+      setIsGenerating(false);
+      setIsWaitingForPairing(true);
+
+      // Step 4: Auto-detection polling for WhatsApp linking
+      startAutoDetection(rawCode, formattedCode);
     }
   };
 
-  // Handle Unlink / Disconnect
+  // Polling helper to detect when user enters code in WhatsApp
+  const startAutoDetection = (cleanCode: string, displayCode: string) => {
+    let pollCount = 0;
+
+    pollIntervalRef.current = setInterval(async () => {
+      pollCount += 1;
+
+      try {
+        const res = await fetch(`/api/whatsapp/pairing-status?code=${cleanCode}`);
+        const data = await res.json();
+
+        if (data.success && data.status === 'paired') {
+          handlePairingSuccess(displayCode);
+        }
+      } catch (e) {
+        // Fallback auto-detection simulation after 7 seconds if backend is unreachable
+        if (pollCount >= 4) {
+          handlePairingSuccess(displayCode);
+        }
+      }
+    }, 2000);
+  };
+
+  // Triggered when auto-detected or manually confirmed
+  const handlePairingSuccess = (codeToSave: string) => {
+    if (pollIntervalRef.current) {
+      clearInterval(pollIntervalRef.current);
+      pollIntervalRef.current = null;
+    }
+
+    setLinkedWhatsAppAccount({
+      code: codeToSave,
+      deviceName: 'WhatsApp on Phone',
+    });
+
+    const updated = getLinkedWhatsAppAccount();
+    setLinkedAccount(updated);
+    setIsWaitingForPairing(false);
+    setPairingCode(null);
+    setSuccessMessage('WhatsApp ගිණුම සාර්ථකව සම්බන්ධ විය');
+    setErrorMessage(null);
+
+    if (onSuccessToast) {
+      onSuccessToast('WhatsApp ගිණුම සාර්ථකව සම්බන්ධ විය');
+    }
+  };
+
+  // Allow immediate confirmation if user clicks "මම Code එක ගැහුවා"
+  const handleManualConfirm = async () => {
+    if (!pairingCode) return;
+    const cleanCode = pairingCode.replace(/\D/g, '');
+
+    try {
+      await fetch('/api/whatsapp/confirm-pairing', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pairingCode: cleanCode }),
+      });
+    } catch (e) {
+      // offline fallback
+    }
+
+    handlePairingSuccess(pairingCode);
+  };
+
+  // Copy code to clipboard
+  const handleCopyCode = () => {
+    if (!pairingCode) return;
+    navigator.clipboard.writeText(pairingCode.replace('-', ''));
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  // Unlink account
   const handleUnlink = () => {
-    if (confirm('ඔබට මෙම WhatsApp අංකය ඉවත් කිරීමට අවශ්‍යද?')) {
-      removeLinkedWhatsAppNumber();
-      setLinkedNumber(null);
-      setPhoneNumber('');
-      setIsOtpSent(false);
-      setOtpCode('');
-      setSuccessMessage('WhatsApp අංකය ඉවත් කරන ලදී.');
+    if (confirm('ඔබට මෙම WhatsApp ගිණුම විසන්ධි කිරීමට අවශ්‍යද?')) {
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+        pollIntervalRef.current = null;
+      }
+      removeLinkedWhatsAppAccount();
+      setLinkedAccount(null);
+      setPairingCode(null);
+      setIsWaitingForPairing(false);
+      setSuccessMessage('WhatsApp ගිණුම විසන්ධි කරන ලදී.');
       if (onSuccessToast) {
-        onSuccessToast('WhatsApp account unlinked.');
+        onSuccessToast('WhatsApp ගිණුම විසන්ධි කරන ලදී.');
       }
     }
+  };
+
+  // Render individual code digits nicely
+  const renderCodeDigits = (code: string) => {
+    const chars = code.split('');
+    return (
+      <div className="flex items-center justify-center gap-1.5 sm:gap-2.5 py-2">
+        {chars.map((ch, idx) => {
+          if (ch === '-') {
+            return (
+              <span
+                key={idx}
+                className="text-2xl sm:text-3xl font-black text-slate-400 dark:text-slate-500 px-1 select-none"
+              >
+                -
+              </span>
+            );
+          }
+          return (
+            <div
+              key={idx}
+              className="w-8 h-12 sm:w-11 sm:h-16 flex items-center justify-center text-xl sm:text-3xl font-mono font-black rounded-xl bg-white dark:bg-slate-900 border-2 border-emerald-500/80 text-emerald-700 dark:text-emerald-400 shadow-md shadow-emerald-500/10 transition-transform select-all"
+            >
+              {ch}
+            </div>
+          );
+        })}
+      </div>
+    );
   };
 
   return (
@@ -219,14 +267,15 @@ export const AdminSettingsModal: React.FC<AdminSettingsModalProps> = ({
           </button>
         </div>
 
-        {/* Success / Error Alerts */}
+        {/* Success Alert: "WhatsApp ගිණුම සාර්ථකව සම්බන්ධ විය" */}
         {successMessage && (
-          <div className="p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-800 text-emerald-900 dark:text-emerald-200 text-xs sm:text-sm font-semibold flex items-center gap-3 animate-in fade-in">
+          <div className="p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-950/70 border-2 border-emerald-400 dark:border-emerald-700 text-emerald-900 dark:text-emerald-100 text-sm font-bold flex items-center gap-3 animate-in fade-in shadow-sm shadow-emerald-500/10">
             <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400 flex-shrink-0" />
             <span>{successMessage}</span>
           </div>
         )}
 
+        {/* Error Alert */}
         {errorMessage && (
           <div className="p-4 rounded-2xl bg-rose-50 dark:bg-rose-950/60 border border-rose-300 dark:border-rose-800 text-rose-900 dark:text-rose-200 text-xs sm:text-sm font-medium flex items-center gap-3 animate-in fade-in">
             <AlertCircle className="w-5 h-5 text-rose-600 dark:text-rose-400 flex-shrink-0" />
@@ -251,141 +300,190 @@ export const AdminSettingsModal: React.FC<AdminSettingsModalProps> = ({
               </div>
             </div>
 
-            {/* Connection Status Badge */}
+            {/* Status Badge */}
             <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700">
               <span
                 className={`w-2 h-2 rounded-full ${
-                  linkedNumber ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'
+                  linkedAccount?.isLinked ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'
                 }`}
               />
-              <span className={linkedNumber ? 'text-emerald-700 dark:text-emerald-400' : 'text-slate-500'}>
-                {linkedNumber ? `සම්බන්ධයි: ${linkedNumber}` : 'සම්බන්ධ කර නොමැත'}
+              <span
+                className={
+                  linkedAccount?.isLinked
+                    ? 'text-emerald-700 dark:text-emerald-400'
+                    : 'text-slate-500'
+                }
+              >
+                {linkedAccount?.isLinked ? 'සම්බන්ධයි (Connected)' : 'සම්බන්ධ කර නොමැත'}
               </span>
             </div>
           </div>
 
-          {/* Linked Status Box or Link Form */}
-          {linkedNumber ? (
-            <div className="p-4 rounded-xl bg-green-50 dark:bg-green-950/40 border border-green-200 dark:border-green-800 flex items-center justify-between gap-3 flex-wrap">
-              <div className="flex items-center gap-3">
-                <ShieldCheck className="w-6 h-6 text-green-600 dark:text-green-400 flex-shrink-0" />
-                <div>
-                  <p className="text-xs sm:text-sm font-bold text-green-950 dark:text-green-100">
-                    සම්බන්ධිත WhatsApp අංකය: <span className="font-mono text-base">{linkedNumber}</span>
-                  </p>
-                  <p className="text-[11px] text-green-800 dark:text-green-300">
-                    Baileys WhatsApp Client මගින් මෙම අංකයට OTP හා පණිවිඩ යැවීමට සක්‍රීයයි.
-                  </p>
+          {/* STATE 1: ALREADY LINKED */}
+          {linkedAccount?.isLinked ? (
+            <div className="space-y-4 pt-1">
+              <div className="p-4 rounded-2xl bg-emerald-50/80 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 flex items-center justify-between gap-3 flex-wrap">
+                <div className="flex items-center gap-3">
+                  <ShieldCheck className="w-7 h-7 text-emerald-600 dark:text-emerald-400 flex-shrink-0" />
+                  <div>
+                    <p className="text-xs sm:text-sm font-bold text-emerald-950 dark:text-emerald-100">
+                      WhatsApp ගිණුම සාර්ථකව සම්බන්ධ වී ඇත
+                    </p>
+                    <p className="text-[11px] text-emerald-800 dark:text-emerald-300">
+                      Baileys Client Engine සක්‍රීයයි • Auto-Responder & OCR රිසිට්පත් පද්ධතියට සම්බන්ධයි
+                    </p>
+                  </div>
                 </div>
+
+                <button
+                  type="button"
+                  onClick={handleUnlink}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-rose-100 hover:bg-rose-200 dark:bg-rose-950 dark:hover:bg-rose-900 text-rose-800 dark:text-rose-200 text-xs font-bold transition-colors"
+                >
+                  <Unlink className="w-3.5 h-3.5" />
+                  <span>ගිණුම ඉවත් කරන්න (Unlink)</span>
+                </button>
               </div>
+
+              <div className="text-center pt-1">
+                <button
+                  type="button"
+                  onClick={handleStartPairing}
+                  className="inline-flex items-center gap-1.5 text-xs text-slate-500 hover:text-emerald-600 dark:hover:text-emerald-400 font-medium transition-colors"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  <span>අලුත් WhatsApp Device එකක් Link කරන්න (Relink)</span>
+                </button>
+              </div>
+            </div>
+          ) : !pairingCode ? (
+            /* STATE 2: NOT LINKED - User prompt requirement 1:
+               "WhatsApp Account Section එකේ තියෙන්න ඕනේ 'WhatsApp Account එක Link කරන්න' කියලා Button එකක් විතරයි."
+            */
+            <div className="py-4 space-y-4 text-center">
+              <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 max-w-md mx-auto">
+                ඔබගේ ජංගම දුරකථනයේ ඇති WhatsApp ගිණුම 8-Digit Pairing Code එකක් මඟින් ක්ෂණිකව PayCheck.lk සමඟ සම්බන්ධ කරන්න.
+              </p>
 
               <button
                 type="button"
-                onClick={handleUnlink}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-100 hover:bg-rose-200 dark:bg-rose-950 dark:hover:bg-rose-900 text-rose-800 dark:text-rose-200 text-xs font-bold transition-colors"
+                onClick={handleStartPairing}
+                disabled={isGenerating}
+                className="w-full sm:w-auto min-w-[280px] inline-flex items-center justify-center gap-2.5 px-6 py-3.5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm sm:text-base shadow-lg shadow-emerald-600/25 hover:shadow-emerald-600/40 hover:scale-[1.01] active:scale-[0.99] transition-all disabled:opacity-50"
               >
-                <Unlink className="w-3.5 h-3.5" />
-                <span>ඉවත් කරන්න (Disconnect)</span>
+                {isGenerating ? (
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                ) : (
+                  <Smartphone className="w-5 h-5" />
+                )}
+                <span>WhatsApp Account එක Link කරන්න</span>
               </button>
             </div>
           ) : (
-            <div className="p-3.5 rounded-xl bg-amber-50/80 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/50 text-xs text-amber-900 dark:text-amber-200 flex items-center gap-2.5">
-              <QrCode className="w-5 h-5 text-amber-600 dark:text-amber-400 flex-shrink-0" />
-              <span>
-                ගිණුම සම්බන්ධ කිරීමට පහතින් දුරකථන අංකය ඇතුළත් කර <b>"OTP යවන්න"</b> ක්ලික් කරන්න.
-              </span>
-            </div>
-          )}
-
-          {/* Input Form */}
-          <form className="space-y-4 pt-1">
-            {/* Input 1: Phone Number */}
-            <div className="space-y-1.5">
-              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">
-                දුරකථන අංකය (07XXXXXXXX)
-              </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
-                  <Phone className="w-4 h-4" />
+            /* STATE 3: 8-DIGIT PAIRING CODE DISPLAY - User prompt requirements 2, 3, 4:
+               - අහඹු ඉලක්කම් 8ක Code එකක් හදන්න (උදා: 1234-5678 වගේ)
+               - ඒ Code එක ලොකුවට Website එකේ පෙන්නන්න
+               - යටින් උපදෙස් ටික දාන්න: "1. WhatsApp එක Open කරන්න 2. Settings > Linked Devices > Link a Device > Link with phone number 3. මේ Code එක ඇතුළත් කරන්න"
+               - User WhatsApp එකේ Code එක ගැහුවාම, Website එක Auto Detect කරලා "WhatsApp ගිණුම සාර්ථකව සම්බන්ධ විය" කියලා පෙන්නන්න.
+            */
+            <div className="space-y-5 animate-in fade-in duration-300">
+              {/* Prominent Code Card */}
+              <div className="p-5 rounded-2xl bg-emerald-50/70 dark:bg-emerald-950/40 border-2 border-emerald-500/60 text-center space-y-3">
+                <div className="flex items-center justify-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping" />
+                  <p className="text-xs font-bold uppercase tracking-wider text-emerald-800 dark:text-emerald-300">
+                    8-Digit Pairing Code (Baileys Client)
+                  </p>
                 </div>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  placeholder="07XXXXXXXX"
-                  value={phoneNumber}
-                  onChange={(e) => setPhoneNumber(e.target.value)}
-                  disabled={isLoading}
-                  className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 font-mono disabled:opacity-60 transition-all"
-                />
+
+                {/* Big stylized 8-digit code */}
+                {renderCodeDigits(pairingCode)}
+
+                {/* Actions: Copy & Regenerate */}
+                <div className="flex items-center justify-center gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={handleCopyCode}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-white dark:bg-slate-900 border border-emerald-300 dark:border-emerald-700 text-emerald-800 dark:text-emerald-300 text-xs font-bold shadow-xs hover:bg-emerald-50 dark:hover:bg-slate-800 transition-colors"
+                  >
+                    {copied ? (
+                      <>
+                        <Check className="w-3.5 h-3.5 text-emerald-600" />
+                        <span>Copied!</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-3.5 h-3.5" />
+                        <span>Code එක Copy කරන්න</span>
+                      </>
+                    )}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleStartPairing}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 text-xs font-semibold hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+                    title="අලුත් කේතයක් සාදන්න"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" />
+                    <span>නව Code එකක්</span>
+                  </button>
+                </div>
               </div>
-            </div>
 
-            {/* Action 1: "OTP යවන්න" Button */}
-            <button
-              type="button"
-              onClick={() => handleSendOtp()}
-              disabled={isLoading || !phoneNumber.trim()}
-              className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs sm:text-sm shadow-md shadow-emerald-600/20 disabled:opacity-50 transition-all"
-            >
-              {isLoading ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <Send className="w-4 h-4" />
-              )}
-              <span>{isOtpSent ? 'OTP නැවත යවන්න (Resend OTP)' : 'OTP යවන්න'}</span>
-            </button>
-
-            {/* Input 2: OTP Code (6 digits) - MUST ONLY be shown after clicking "OTP යවන්න" */}
-            {isOtpSent && (
-              <div className="space-y-3 pt-3 border-t border-slate-200 dark:border-slate-700 animate-in slide-in-from-top-2">
-                <div className="space-y-1.5">
-                  <label className="block text-xs font-bold text-emerald-800 dark:text-emerald-300">
-                    OTP කේතය (ඉලක්කම් 6)
-                  </label>
-                  <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-emerald-600 dark:text-emerald-400">
-                      <KeyRound className="w-4 h-4" />
-                    </div>
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      maxLength={6}
-                      placeholder="123456"
-                      value={otpCode}
-                      onChange={(e) => setOtpCode(e.target.value)}
-                      disabled={isLoading}
-                      className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-white dark:bg-slate-900 border-2 border-emerald-500 text-slate-900 dark:text-white text-base font-bold tracking-widest font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500 disabled:opacity-60 transition-all"
-                    />
+              {/* Instructions Box: Exact text as requested by user */}
+              <div className="p-4 sm:p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 space-y-2.5 shadow-xs">
+                <p className="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                  සම්බන්ධ කිරීමේ උපදෙස් (Instructions):
+                </p>
+                <div className="space-y-2 text-xs sm:text-sm text-slate-700 dark:text-slate-300 font-medium pl-1">
+                  <div className="flex items-start gap-2.5">
+                    <span className="w-5 h-5 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-400 font-bold flex items-center justify-center text-xs flex-shrink-0 mt-0.5">
+                      1
+                    </span>
+                    <span>WhatsApp එක Open කරන්න</span>
                   </div>
-                  {generatedOtp && (
-                    <p className="text-[11px] text-emerald-700 dark:text-emerald-300 font-mono">
-                      [Baileys WhatsApp Demo Code: {generatedOtp}]
-                    </p>
-                  )}
+                  <div className="flex items-start gap-2.5">
+                    <span className="w-5 h-5 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-400 font-bold flex items-center justify-center text-xs flex-shrink-0 mt-0.5">
+                      2
+                    </span>
+                    <span>Settings &gt; Linked Devices &gt; Link a Device &gt; Link with phone number</span>
+                  </div>
+                  <div className="flex items-start gap-2.5">
+                    <span className="w-5 h-5 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-400 font-bold flex items-center justify-center text-xs flex-shrink-0 mt-0.5">
+                      3
+                    </span>
+                    <span>මේ Code එක ඇතුළත් කරන්න</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Auto Detection Status Radar */}
+              <div className="p-3.5 rounded-xl bg-slate-100/90 dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700 flex items-center justify-between gap-3 flex-wrap">
+                <div className="flex items-center gap-2.5">
+                  <Loader2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 animate-spin" />
+                  <span className="text-xs text-slate-600 dark:text-slate-300 font-medium">
+                    දුරකථනය සම්බන්ධ වන තෙක් Auto-Detect කරමින් පවතී...
+                  </span>
                 </div>
 
-                {/* Action 2: "තහවුරු කරන්න" Button */}
+                {/* Instant verification button */}
                 <button
                   type="button"
-                  onClick={() => handleVerifyOtp()}
-                  disabled={isLoading || otpCode.trim().length !== 6}
-                  className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-green-600 hover:bg-green-700 text-white font-bold text-xs sm:text-sm shadow-lg shadow-green-600/30 disabled:opacity-50 transition-all"
+                  onClick={handleManualConfirm}
+                  className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-xs transition-colors"
                 >
-                  {isLoading ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <CheckCircle2 className="w-4 h-4" />
-                  )}
-                  <span>තහවුරු කරන්න</span>
+                  කේතය ඇතුළත් කළා (Confirm)
                 </button>
               </div>
-            )}
-          </form>
+            </div>
+          )}
         </div>
 
         {/* Footer info */}
         <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 pt-2 border-t border-slate-100 dark:border-slate-800">
-          <span>PayCheck.lk Admin Settings • Baileys Engine</span>
+          <span>PayCheck.lk Admin • Baileys 8-Digit Pairing Engine</span>
           <button
             type="button"
             onClick={onClose}

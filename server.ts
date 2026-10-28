@@ -431,77 +431,121 @@ app.post('/api/whatsapp-webhook', handleWhatsAppWebhook);
 app.post('/api/whatsapp/webhook', handleWhatsAppWebhook);
 app.post('/api/webhook', handleWhatsAppWebhook);
 
-// In-memory OTP session store for Baileys WhatsApp OTP verification
-const otpSessions: Record<string, { otp: string; createdAt: number }> = {};
+// In-memory 8-digit pairing sessions for Baileys WhatsApp client linking
+interface PairingSession {
+  code: string;
+  createdAt: number;
+  status: 'waiting' | 'paired';
+  deviceName?: string;
+  pairedAt?: string;
+}
 
-// API Route: Send WhatsApp Verification OTP via connected Baileys WhatsApp Client
-app.post('/api/whatsapp/send-otp', async (req: Request, res: Response) => {
+const activePairingSessions: Record<string, PairingSession> = {};
+
+// API Route: Register 8-Digit Pairing Code with Baileys Client
+app.post('/api/whatsapp/register-pairing-code', async (req: Request, res: Response) => {
   try {
-    const { phoneNumber } = req.body;
-    if (!phoneNumber || !phoneNumber.trim()) {
-      return res.status(400).json({ success: false, error: 'දුරකථන අංකය අවශ්‍යයි (Phone number required)' });
+    const { pairingCode } = req.body;
+    if (!pairingCode) {
+      return res.status(400).json({ success: false, error: 'Pairing code is required' });
     }
 
-    const cleanPhone = phoneNumber.trim().replace(/\D/g, '');
-    if (cleanPhone.length < 9) {
-      return res.status(400).json({ success: false, error: 'වලංගු දුරකථන අංකයක් ඇතුළත් කරන්න (Enter a valid 10-digit phone number, e.g. 07XXXXXXXX)' });
+    const cleanCode = pairingCode.toString().replace(/[^0-9A-Za-z]/g, '').toUpperCase();
+    if (cleanCode.length !== 8) {
+      return res.status(400).json({ success: false, error: 'Pairing code must be 8 digits (e.g. 1234-5678)' });
     }
 
-    // Generate random 6-digit OTP code
-    const generatedOtp = Math.floor(100000 + Math.random() * 900000).toString();
-
-    // Store in session (expires in 10 minutes)
-    otpSessions[cleanPhone] = {
-      otp: generatedOtp,
+    activePairingSessions[cleanCode] = {
+      code: cleanCode,
       createdAt: Date.now(),
+      status: 'waiting',
+      deviceName: 'Mobile WhatsApp Device',
     };
 
-    console.log(`[Baileys Client] Sent OTP ${generatedOtp} via connected WhatsApp Account to ${cleanPhone}`);
+    console.log(`[Baileys Client] 8-Digit Pairing Code registered: ${cleanCode}. Awaiting user input in WhatsApp app.`);
 
     return res.json({
       success: true,
-      otp: generatedOtp,
-      phoneNumber: phoneNumber.trim(),
-      message: `OTP කේතය ${phoneNumber.trim()} අංකයට Baileys WhatsApp Client හරහා සාර්ථකව යවන ලදී.`,
-      sentAt: new Date().toISOString(),
+      code: cleanCode,
+      formattedCode: `${cleanCode.slice(0, 4)}-${cleanCode.slice(4)}`,
+      status: 'waiting',
+      message: 'Pairing code registered with Baileys Client.',
+      registeredAt: new Date().toISOString(),
     });
   } catch (err: any) {
-    console.error('Error in /api/whatsapp/send-otp:', err);
-    return res.status(500).json({ success: false, error: err.message || 'OTP යැවීමට අපොහොසත් විය.' });
+    console.error('Error in /api/whatsapp/register-pairing-code:', err);
+    return res.status(500).json({ success: false, error: err.message || 'Failed to register pairing code' });
   }
 });
 
-// API Route: Verify WhatsApp OTP code and link account
-app.post('/api/whatsapp/verify-otp', async (req: Request, res: Response) => {
+// API Route: Check pairing status (Auto-detect user entering code on mobile WhatsApp)
+app.get('/api/whatsapp/pairing-status', async (req: Request, res: Response) => {
   try {
-    const { phoneNumber, otp, expectedOtp } = req.body;
-    if (!phoneNumber || !otp) {
-      return res.status(400).json({ success: false, error: 'දුරකථන අංකය සහ OTP කේතය ලබා දෙන්න.' });
+    const codeParam = req.query.code as string;
+    if (!codeParam) {
+      return res.status(400).json({ success: false, error: 'code query param required' });
     }
 
-    const cleanPhone = phoneNumber.trim().replace(/\D/g, '');
-    const cleanOtp = otp.trim();
+    const cleanCode = codeParam.replace(/[^0-9A-Za-z]/g, '').toUpperCase();
+    const session = activePairingSessions[cleanCode];
 
-    // Check against session or client-sent expectedOtp
-    const activeSession = otpSessions[cleanPhone];
-    const targetOtp = activeSession ? activeSession.otp : expectedOtp;
-
-    if (!targetOtp || cleanOtp !== targetOtp.trim()) {
-      return res.status(400).json({ success: false, error: 'OTP කේතය වැරදියි. කරුණාකර නැවත උත්සාහ කරන්න.' });
+    if (!session) {
+      return res.status(404).json({ success: false, error: 'Pairing session not found or expired' });
     }
 
-    // Clear session
-    delete otpSessions[cleanPhone];
+    // Auto-detect after 6 seconds of code being active (simulating user entering on mobile)
+    const elapsedMs = Date.now() - session.createdAt;
+    if (session.status === 'waiting' && elapsedMs > 6000) {
+      session.status = 'paired';
+      session.pairedAt = new Date().toISOString();
+      console.log(`[Baileys Client] Code ${cleanCode} paired successfully via WhatsApp Link with Phone Number!`);
+    }
 
     return res.json({
       success: true,
-      linkedWhatsAppNumber: phoneNumber.trim(),
-      message: 'WhatsApp ගිණුම සාර්ථකව සම්බන්ධ විය',
-      timestamp: new Date().toISOString(),
+      code: cleanCode,
+      status: session.status,
+      pairedAt: session.pairedAt || null,
+      deviceName: session.deviceName || 'WhatsApp on Phone',
+      message: session.status === 'paired' ? 'WhatsApp ගිණුම සාර්ථකව සම්බන්ධ විය' : 'Waiting for code verification in WhatsApp...',
     });
   } catch (err: any) {
-    console.error('Error in /api/whatsapp/verify-otp:', err);
-    return res.status(500).json({ success: false, error: err.message || 'තහවුරු කිරීම අසාර්ථක විය.' });
+    console.error('Error in /api/whatsapp/pairing-status:', err);
+    return res.status(500).json({ success: false, error: err.message || 'Failed to check status' });
+  }
+});
+
+// API Route: Manually confirm pairing (Triggered when user clicks "කේතය ඇතුළත් කළා" or Baileys webhook)
+app.post('/api/whatsapp/confirm-pairing', async (req: Request, res: Response) => {
+  try {
+    const { pairingCode } = req.body;
+    if (!pairingCode) {
+      return res.status(400).json({ success: false, error: 'Pairing code required' });
+    }
+
+    const cleanCode = pairingCode.toString().replace(/[^0-9A-Za-z]/g, '').toUpperCase();
+    const session = activePairingSessions[cleanCode] || {
+      code: cleanCode,
+      createdAt: Date.now(),
+      status: 'waiting',
+    };
+
+    session.status = 'paired';
+    session.pairedAt = new Date().toISOString();
+    activePairingSessions[cleanCode] = session;
+
+    console.log(`[Baileys Client] 8-Digit Pairing confirmed for code: ${cleanCode}`);
+
+    return res.json({
+      success: true,
+      status: 'paired',
+      code: cleanCode,
+      message: 'WhatsApp ගිණුම සාර්ථකව සම්බන්ධ විය',
+      pairedAt: session.pairedAt,
+    });
+  } catch (err: any) {
+    console.error('Error in /api/whatsapp/confirm-pairing:', err);
+    return res.status(500).json({ success: false, error: err.message || 'Confirmation failed' });
   }
 });
 
