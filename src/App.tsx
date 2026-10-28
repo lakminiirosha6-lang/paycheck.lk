@@ -28,6 +28,7 @@ import { GoogleSheetsModal } from './components/GoogleSheetsModal';
 import { GitHubGuideModal } from './components/GitHubGuideModal';
 import { ImagePreviewModal } from './components/ImagePreviewModal';
 import { WhatsAppAiModal } from './components/WhatsAppAiModal';
+import { AdminSettingsModal } from './components/AdminSettingsModal';
 
 import {
   Loader2,
@@ -68,10 +69,12 @@ export default function App() {
   const [isSheetsModalOpen, setIsSheetsModalOpen] = useState(false);
   const [isGithubModalOpen, setIsGithubModalOpen] = useState(false);
   const [isWhatsAppAiModalOpen, setIsWhatsAppAiModalOpen] = useState(false);
+  const [isAdminSettingsOpen, setIsAdminSettingsOpen] = useState(false);
   const [whatsAppModalReceipt, setWhatsAppModalReceipt] = useState<ReceiptRecord | null>(null);
   const [previewImageReceipt, setPreviewImageReceipt] = useState<ReceiptRecord | null>(null);
   const [justSavedReceipt, setJustSavedReceipt] = useState<ReceiptRecord | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
 
   const t = TRANSLATIONS[lang];
 
@@ -239,7 +242,9 @@ export default function App() {
         onOpenGithubGuide={() => setIsGithubModalOpen(true)}
         onOpenSheetsModal={() => setIsSheetsModalOpen(true)}
         onOpenWhatsAppAiModal={() => handleOpenWhatsAppAi(null)}
+        onOpenAdminSettings={() => setIsAdminSettingsOpen(true)}
       />
+
 
       {/* Main Content Area */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-6">
@@ -468,8 +473,17 @@ export default function App() {
         </p>
       </footer>
 
+      {/* Admin Settings Modal */}
+      <AdminSettingsModal
+        isOpen={isAdminSettingsOpen}
+        onClose={() => setIsAdminSettingsOpen(false)}
+        lang={lang}
+        onSuccessToast={showToast}
+      />
+
       {/* WhatsApp AI Auto-Responder Modal */}
       <WhatsAppAiModal
+
         isOpen={isWhatsAppAiModalOpen}
         onClose={() => setIsWhatsAppAiModalOpen(false)}
         receipts={receipts}

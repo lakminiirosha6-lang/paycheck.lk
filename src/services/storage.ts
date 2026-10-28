@@ -205,3 +205,33 @@ export const saveWhatsAppReceiptsToStorage = (receipts: any[]) => {
   }
 };
 
+const LINKED_WHATSAPP_KEY = 'linkedWhatsAppNumber';
+
+export const getLinkedWhatsAppNumber = (): string | null => {
+  try {
+    return localStorage.getItem(LINKED_WHATSAPP_KEY) || localStorage.getItem('paycheck_lk_linked_whatsapp_number');
+  } catch (e) {
+    console.error('Failed to get linkedWhatsAppNumber:', e);
+    return null;
+  }
+};
+
+export const setLinkedWhatsAppNumber = (phoneNumber: string): void => {
+  try {
+    localStorage.setItem(LINKED_WHATSAPP_KEY, phoneNumber);
+    localStorage.setItem('paycheck_lk_linked_whatsapp_number', phoneNumber);
+  } catch (e) {
+    console.error('Failed to save linkedWhatsAppNumber:', e);
+  }
+};
+
+export const removeLinkedWhatsAppNumber = (): void => {
+  try {
+    localStorage.removeItem(LINKED_WHATSAPP_KEY);
+    localStorage.removeItem('paycheck_lk_linked_whatsapp_number');
+  } catch (e) {
+    console.error('Failed to remove linkedWhatsAppNumber:', e);
+  }
+};
+
+

@@ -2,7 +2,7 @@ import React from 'react';
 import { User } from 'firebase/auth';
 import { TRANSLATIONS } from '../constants/translations';
 import { Language } from '../types';
-import { ShieldCheck, Globe, LogOut, FileSpreadsheet, Github, Download, Bot } from 'lucide-react';
+import { ShieldCheck, Globe, LogOut, FileSpreadsheet, Github, Download, Bot, Settings } from 'lucide-react';
 
 import { ReceiptLogo } from './ReceiptLogo';
 
@@ -15,7 +15,9 @@ interface HeaderProps {
   onOpenGithubGuide: () => void;
   onOpenSheetsModal: () => void;
   onOpenWhatsAppAiModal: () => void;
+  onOpenAdminSettings?: () => void;
 }
+
 
 export const Header: React.FC<HeaderProps> = ({
   lang,
@@ -26,6 +28,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenGithubGuide,
   onOpenSheetsModal,
   onOpenWhatsAppAiModal,
+  onOpenAdminSettings,
 }) => {
   const t = TRANSLATIONS[lang];
 
@@ -81,6 +84,19 @@ export const Header: React.FC<HeaderProps> = ({
               </button>
             </div>
 
+            {/* Admin Settings Modal Button */}
+            {onOpenAdminSettings && (
+              <button
+                type="button"
+                onClick={onOpenAdminSettings}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs sm:text-sm font-bold rounded-lg text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors shadow-2xs"
+                title="Admin Settings & WhatsApp Account"
+              >
+                <Settings className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                <span className="hidden sm:inline">Admin Settings</span>
+              </button>
+            )}
+
             {/* WhatsApp AI Auto-Reply & Dispatcher */}
             <button
               type="button"
@@ -102,6 +118,7 @@ export const Header: React.FC<HeaderProps> = ({
               <FileSpreadsheet className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
               <span className="hidden md:inline">Google Sheets</span>
             </button>
+
 
             {/* Google Sign In / Account Status */}
             {currentUser ? (

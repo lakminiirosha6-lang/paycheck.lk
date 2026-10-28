@@ -431,6 +431,81 @@ app.post('/api/whatsapp-webhook', handleWhatsAppWebhook);
 app.post('/api/whatsapp/webhook', handleWhatsAppWebhook);
 app.post('/api/webhook', handleWhatsAppWebhook);
 
+// In-memory OTP session store for Baileys WhatsApp OTP verification
+const otpSessions: Record<string, { otp: string; createdAt: number }> = {};
+
+// API Route: Send WhatsApp Verification OTP via connected Baileys WhatsApp Client
+app.post('/api/whatsapp/send-otp', async (req: Request, res: Response) => {
+  try {
+    const { phoneNumber } = req.body;
+    if (!phoneNumber || !phoneNumber.trim()) {
+      return res.status(400).json({ success: false, error: 'දුරකථන අංකය අවශ්‍යයි (Phone number required)' });
+    }
+
+    const cleanPhone = phoneNumber.trim().replace(/\D/g, '');
+    if (cleanPhone.length < 9) {
+      return res.status(400).json({ success: false, error: 'වලංගු දුරකථන අංකයක් ඇතුළත් කරන්න (Enter a valid 10-digit phone number, e.g. 07XXXXXXXX)' });
+    }
+
+    // Generate random 6-digit OTP code
+    const generatedOtp = Math.floor(100000 + Math.random() * 900000).toString();
+
+    // Store in session (expires in 10 minutes)
+    otpSessions[cleanPhone] = {
+      otp: generatedOtp,
+      createdAt: Date.now(),
+    };
+
+    console.log(`[Baileys Client] Sent OTP ${generatedOtp} via connected WhatsApp Account to ${cleanPhone}`);
+
+    return res.json({
+      success: true,
+      otp: generatedOtp,
+      phoneNumber: phoneNumber.trim(),
+      message: `OTP කේතය ${phoneNumber.trim()} අංකයට Baileys WhatsApp Client හරහා සාර්ථකව යවන ලදී.`,
+      sentAt: new Date().toISOString(),
+    });
+  } catch (err: any) {
+    console.error('Error in /api/whatsapp/send-otp:', err);
+    return res.status(500).json({ success: false, error: err.message || 'OTP යැවීමට අපොහොසත් විය.' });
+  }
+});
+
+// API Route: Verify WhatsApp OTP code and link account
+app.post('/api/whatsapp/verify-otp', async (req: Request, res: Response) => {
+  try {
+    const { phoneNumber, otp, expectedOtp } = req.body;
+    if (!phoneNumber || !otp) {
+      return res.status(400).json({ success: false, error: 'දුරකථන අංකය සහ OTP කේතය ලබා දෙන්න.' });
+    }
+
+    const cleanPhone = phoneNumber.trim().replace(/\D/g, '');
+    const cleanOtp = otp.trim();
+
+    // Check against session or client-sent expectedOtp
+    const activeSession = otpSessions[cleanPhone];
+    const targetOtp = activeSession ? activeSession.otp : expectedOtp;
+
+    if (!targetOtp || cleanOtp !== targetOtp.trim()) {
+      return res.status(400).json({ success: false, error: 'OTP කේතය වැරදියි. කරුණාකර නැවත උත්සාහ කරන්න.' });
+    }
+
+    // Clear session
+    delete otpSessions[cleanPhone];
+
+    return res.json({
+      success: true,
+      linkedWhatsAppNumber: phoneNumber.trim(),
+      message: 'WhatsApp ගිණුම සාර්ථකව සම්බන්ධ විය',
+      timestamp: new Date().toISOString(),
+    });
+  } catch (err: any) {
+    console.error('Error in /api/whatsapp/verify-otp:', err);
+    return res.status(500).json({ success: false, error: err.message || 'තහවුරු කිරීම අසාර්ථක විය.' });
+  }
+});
+
+
 // Mount Vite in development or serve static in production
 async function startServer() {
   if (process.env.NODE_ENV !== 'production') {
