@@ -494,13 +494,7 @@ app.get('/api/whatsapp/pairing-status', async (req: Request, res: Response) => {
       return res.status(404).json({ success: false, error: 'Pairing session not found or expired' });
     }
 
-    // Auto-detect after 6 seconds of code being active (simulating user entering on mobile)
-    const elapsedMs = Date.now() - session.createdAt;
-    if (session.status === 'waiting' && elapsedMs > 6000) {
-      session.status = 'paired';
-      session.pairedAt = new Date().toISOString();
-      console.log(`[Baileys Client] Code ${cleanCode} paired successfully via WhatsApp Link with Phone Number!`);
-    }
+    // Return current pairing session status (only paired after explicit confirmation)
 
     return res.json({
       success: true,

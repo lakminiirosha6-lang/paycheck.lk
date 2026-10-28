@@ -27,6 +27,9 @@ import {
   getLinkingSession,
   clearLinkingSession,
   generate8DigitLinkingCode,
+  WHATSAPP_VERIFIED_KEY,
+  isWhatsAppVerified,
+  disconnectWhatsApp,
 } from '../services/storage';
 import { Language } from '../types';
 
@@ -60,27 +63,30 @@ export const AdminSettingsModal: React.FC<AdminSettingsModalProps> = ({
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Initialize modal state on open
+  // Initialize modal state on open - strictly verify paycheck_whatsapp_verified
   useEffect(() => {
     if (isOpen) {
-      const stored = getLinkedWhatsAppAccount();
+      // 1. Strict check: ONLY if paycheck_whatsapp_verified === 'true'
+      const isVerified = localStorage.getItem('paycheck_whatsapp_verified') === 'true';
+      const stored = isVerified ? getLinkedWhatsAppAccount() : null;
       setLinkedAccount(stored);
+
+      // On page load/open: DO NOT show success message automatically
       setErrorMessage(null);
       setSuccessMessage(null);
       setCopied(false);
 
-      if (stored?.isLinked) {
+      if (isVerified && stored?.isLinked) {
         setCurrentStep(1);
         setGeneratedCode(null);
       } else {
-        // Check if an unexpired linking session exists
+        // If not verified, isLinked is false. Show "Link නොකර ඇත" status
         const activeSession = getLinkingSession();
         if (activeSession && activeSession.code && activeSession.phone && activeSession.expiry > Date.now()) {
           setPhoneNumber(activeSession.phone);
           setGeneratedCode(activeSession.code);
           setCodeExpiryTime(activeSession.expiry);
           setCurrentStep(2);
-          startAutoDetection(activeSession.code, activeSession.phone);
         } else {
           setCurrentStep(1);
           setGeneratedCode(null);
@@ -191,8 +197,7 @@ export const AdminSettingsModal: React.FC<AdminSettingsModalProps> = ({
         console.warn('Backend register-pairing-code offline, operating standalone:', err);
       }
 
-      // Start auto detection for WhatsApp incoming link/confirmation
-      startAutoDetection(newCode, cleanPhone);
+      // Step 2 is active, awaiting user to click "Link කරමි"
     } catch (err: any) {
       setErrorMessage(err.message || 'කේතය සෑදීමේදී දෝෂයක් ඇති විය.');
     } finally {
@@ -200,38 +205,36 @@ export const AdminSettingsModal: React.FC<AdminSettingsModalProps> = ({
     }
   };
 
-  // Auto-detection polling for WhatsApp confirmation
-  const startAutoDetection = (code: string, phone: string) => {
-    if (pollIntervalRef.current) {
-      clearInterval(pollIntervalRef.current);
+  // User manually confirms by clicking "Link කරමි"
+  const handleManualLinkConfirm = async () => {
+    if (!generatedCode || !phoneNumber) return;
+    setIsLinking(true);
+    setErrorMessage(null);
+
+    try {
+      const cleanCode = generatedCode.replace(/[^0-9A-Za-z]/g, '').toUpperCase();
+      await fetch('/api/whatsapp/confirm-pairing', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pairingCode: cleanCode, phoneNumber }),
+      });
+    } catch (e) {
+      console.warn('Pairing confirm API offline, saving locally:', e);
+    } finally {
+      setIsLinking(false);
     }
 
-    const cleanCode = code.replace(/[^0-9A-Za-z]/g, '').toUpperCase();
-    let pollCount = 0;
-
-    pollIntervalRef.current = setInterval(async () => {
-      pollCount += 1;
-
-      try {
-        const res = await fetch(`/api/whatsapp/pairing-status?code=${cleanCode}`);
-        const data = await res.json();
-
-        if (data.success && data.status === 'paired') {
-          handleSuccessfulLink(phone, code);
-        }
-      } catch (e) {
-        // Fallback auto-detection simulation after 6-8 seconds if backend is offline
-        if (pollCount >= 4) {
-          handleSuccessfulLink(phone, code);
-        }
-      }
-    }, 2000);
+    // Set verified flag in localStorage: User MUST click "Link කරමි" -> THEN ONLY show success
+    localStorage.setItem('paycheck_whatsapp_verified', 'true');
+    handleSuccessfulLink(phoneNumber, generatedCode);
   };
 
-  // STEP 2: When "Link කරමි" is clicked or auto-detected
+  // Finalize linking state and display success
   const handleSuccessfulLink = (phoneToLink: string, codeToLink: string) => {
     cleanupTimers();
     setIsLinking(false);
+
+    localStorage.setItem('paycheck_whatsapp_verified', 'true');
 
     setLinkedWhatsAppAccount({
       phone: phoneToLink,
@@ -249,24 +252,22 @@ export const AdminSettingsModal: React.FC<AdminSettingsModalProps> = ({
     }
   };
 
-  // User manually confirms: "Link කරමි"
-  const handleManualLinkConfirm = async () => {
-    if (!generatedCode || !phoneNumber) return;
-    setIsLinking(true);
-    setErrorMessage(null);
-
-    try {
-      const cleanCode = generatedCode.replace(/[^0-9A-Za-z]/g, '').toUpperCase();
-      await fetch('/api/whatsapp/confirm-pairing', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pairingCode: cleanCode, phoneNumber }),
-      });
-    } catch (e) {
-      // Offline fallback
+  // Reset / Disconnect function - Clears paycheck_whatsapp_verified for testing
+  const handleDisconnect = () => {
+    cleanupTimers();
+    localStorage.removeItem('paycheck_whatsapp_verified');
+    localStorage.removeItem('whatsapp_linked');
+    removeLinkedWhatsAppAccount();
+    clearLinkingSession();
+    setLinkedAccount(null);
+    setGeneratedCode(null);
+    setPhoneNumber('');
+    setCurrentStep(1);
+    setSuccessMessage(null);
+    setErrorMessage('WhatsApp ගිණුම විසන්ධි කරන ලදී (Disconnected).');
+    if (onSuccessToast) {
+      onSuccessToast('WhatsApp ගිණුම විසන්ධි කරන ලදී.');
     }
-
-    handleSuccessfulLink(phoneNumber, generatedCode);
   };
 
   // Copy Code to clipboard
@@ -275,22 +276,6 @@ export const AdminSettingsModal: React.FC<AdminSettingsModalProps> = ({
     navigator.clipboard.writeText(generatedCode);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
-  };
-
-  // Unlink existing account
-  const handleUnlink = () => {
-    if (confirm('ඔබට මෙම WhatsApp ගිණුම විසන්ධි කිරීමට අවශ්‍යද?')) {
-      cleanupTimers();
-      removeLinkedWhatsAppAccount();
-      setLinkedAccount(null);
-      setGeneratedCode(null);
-      setPhoneNumber('');
-      setCurrentStep(1);
-      setSuccessMessage('WhatsApp ගිණුම විසන්ධි කරන ලදී.');
-      if (onSuccessToast) {
-        onSuccessToast('WhatsApp ගිණුම විසන්ධි කරන ලදී.');
-      }
-    }
   };
 
   // Back to Step 1 to change number
@@ -421,7 +406,7 @@ export const AdminSettingsModal: React.FC<AdminSettingsModalProps> = ({
                     : 'text-slate-500'
                 }
               >
-                {linkedAccount?.isLinked ? 'සම්බන්ධයි (Connected)' : 'සම්බන්ධ කර නොමැත'}
+                {linkedAccount?.isLinked ? 'සම්බන්ධයි (Connected)' : 'Link නොකර ඇත'}
               </span>
             </div>
           </div>
@@ -445,11 +430,12 @@ export const AdminSettingsModal: React.FC<AdminSettingsModalProps> = ({
 
                   <button
                     type="button"
-                    onClick={handleUnlink}
+                    onClick={handleDisconnect}
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-100 hover:bg-rose-200 dark:bg-rose-950 dark:hover:bg-rose-900 text-rose-800 dark:text-rose-200 text-xs font-bold transition-colors"
+                    title="Disconnect WhatsApp and remove verification"
                   >
                     <Unlink className="w-3.5 h-3.5" />
-                    <span>ගිණුම ඉවත් කරන්න (Unlink)</span>
+                    <span>Disconnect (ගිණුම විසන්ධි කරන්න)</span>
                   </button>
                 </div>
 
@@ -459,12 +445,18 @@ export const AdminSettingsModal: React.FC<AdminSettingsModalProps> = ({
                 </div>
               </div>
 
-              <div className="text-center pt-1">
+              <div className="flex items-center justify-between pt-1">
+                <button
+                  type="button"
+                  onClick={handleDisconnect}
+                  className="text-xs text-rose-600 dark:text-rose-400 hover:underline font-semibold transition-colors"
+                >
+                  Disconnect WhatsApp
+                </button>
                 <button
                   type="button"
                   onClick={() => {
-                    removeLinkedWhatsAppAccount();
-                    setLinkedAccount(null);
+                    handleDisconnect();
                     setCurrentStep(1);
                   }}
                   className="text-xs text-slate-500 hover:text-emerald-600 dark:hover:text-emerald-400 font-semibold transition-colors"
@@ -675,7 +667,17 @@ export const AdminSettingsModal: React.FC<AdminSettingsModalProps> = ({
 
         {/* Modal Footer */}
         <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 pt-2 border-t border-slate-100 dark:border-slate-800">
-          <span>PayCheck.lk • Secure WhatsApp Pairing</span>
+          <div className="flex items-center gap-3">
+            <span>PayCheck.lk • Secure WhatsApp Pairing</span>
+            <button
+              type="button"
+              onClick={handleDisconnect}
+              className="text-slate-400 hover:text-rose-500 dark:hover:text-rose-400 underline transition-colors"
+              title="Reset verification state to test"
+            >
+              Disconnect / Reset
+            </button>
+          </div>
           <button
             type="button"
             onClick={onClose}

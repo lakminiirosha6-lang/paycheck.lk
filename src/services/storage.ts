@@ -205,6 +205,7 @@ export const saveWhatsAppReceiptsToStorage = (receipts: any[]) => {
   }
 };
 
+export const WHATSAPP_VERIFIED_KEY = 'paycheck_whatsapp_verified';
 const LINKED_WHATSAPP_KEY = 'linkedWhatsAppNumber';
 const LINKED_WHATSAPP_ACCOUNT_KEY = 'paycheck_lk_linked_whatsapp_account';
 
@@ -223,6 +224,14 @@ export interface WhatsAppLinkingSession {
 }
 
 const LINKING_SESSION_KEY = 'whatsapp_linking_session';
+
+export const isWhatsAppVerified = (): boolean => {
+  try {
+    return localStorage.getItem(WHATSAPP_VERIFIED_KEY) === 'true';
+  } catch {
+    return false;
+  }
+};
 
 export const generate8DigitLinkingCode = (): string => {
   const letters = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
@@ -270,8 +279,23 @@ export const clearLinkingSession = (): void => {
 
 export const getLinkedWhatsAppAccount = (): LinkedWhatsAppAccount | null => {
   try {
+    // CRITICAL: Default isLinked = false unless paycheck_whatsapp_verified === 'true'
+    const isVerified = localStorage.getItem(WHATSAPP_VERIFIED_KEY) === 'true';
+    if (!isVerified) {
+      return null;
+    }
+
     const raw = localStorage.getItem(LINKED_WHATSAPP_ACCOUNT_KEY);
-    if (raw) return JSON.parse(raw);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed) {
+        return {
+          ...parsed,
+          isLinked: true,
+        };
+      }
+    }
+
     const legacyNumber = localStorage.getItem(LINKED_WHATSAPP_KEY);
     if (legacyNumber) {
       return {
@@ -281,6 +305,12 @@ export const getLinkedWhatsAppAccount = (): LinkedWhatsAppAccount | null => {
         deviceName: `WhatsApp (${legacyNumber})`,
       };
     }
+
+    return {
+      isLinked: true,
+      linkedAt: new Date().toISOString(),
+      deviceName: 'WhatsApp Account',
+    };
   } catch (e) {
     console.error('Failed to get linked WhatsApp account:', e);
   }
@@ -289,6 +319,8 @@ export const getLinkedWhatsAppAccount = (): LinkedWhatsAppAccount | null => {
 
 export const setLinkedWhatsAppAccount = (data: { phone?: string; code?: string; deviceName?: string }): void => {
   try {
+    // Only set verified when explicitly confirmed/linked
+    localStorage.setItem(WHATSAPP_VERIFIED_KEY, 'true');
     const payload: LinkedWhatsAppAccount = {
       isLinked: true,
       phone: data.phone,
@@ -311,6 +343,8 @@ export const setLinkedWhatsAppAccount = (data: { phone?: string; code?: string; 
 
 export const removeLinkedWhatsAppAccount = (): void => {
   try {
+    localStorage.removeItem(WHATSAPP_VERIFIED_KEY);
+    localStorage.removeItem('whatsapp_linked');
     localStorage.removeItem(LINKED_WHATSAPP_ACCOUNT_KEY);
     localStorage.removeItem(LINKED_WHATSAPP_KEY);
     localStorage.removeItem('paycheck_lk_linked_whatsapp_number');
@@ -320,12 +354,16 @@ export const removeLinkedWhatsAppAccount = (): void => {
   }
 };
 
+export const disconnectWhatsApp = (): void => {
+  removeLinkedWhatsAppAccount();
+};
+
 export const getLinkedWhatsAppNumber = (): string | null => {
   try {
     const acc = getLinkedWhatsAppAccount();
     if (acc && acc.phone) return acc.phone;
     if (acc && acc.isLinked) return 'WhatsApp Active';
-    return localStorage.getItem(LINKED_WHATSAPP_KEY) || localStorage.getItem('paycheck_lk_linked_whatsapp_number');
+    return null;
   } catch (e) {
     console.error('Failed to get linkedWhatsAppNumber:', e);
     return null;
@@ -343,6 +381,7 @@ export const setLinkedWhatsAppNumber = (phoneNumber: string): void => {
 export const removeLinkedWhatsAppNumber = (): void => {
   removeLinkedWhatsAppAccount();
 };
+
 
 
 
